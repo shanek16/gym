@@ -318,3 +318,17 @@ register(
     entry_point="gym.envs.mujoco.humanoidstandup_v4:HumanoidStandupEnv",
     max_episode_steps=1000,
 )
+
+# Custom env
+# ----------------------------------------
+register(
+    id="Rand_cycle-v0",
+    entry_point="gym.envs.custom_env.rand_cycle:Rand_cycle",
+    max_episode_steps=3600,
+)
+
+register(
+    id="Plain_cycle-v0",
+    entry_point="gym.envs.custom_env.plain_cycle:Plain_cycle",
+    max_episode_steps=3600,
+)
