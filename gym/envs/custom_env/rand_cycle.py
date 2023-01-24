@@ -3,7 +3,7 @@ import os
 import numpy as np
 import sys
 sys.path.append('/home/shane16/Project/tianshou/gym/gym/envs/custom_env')
-import rendering
+# import rendering
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from gym.utils import seeding
