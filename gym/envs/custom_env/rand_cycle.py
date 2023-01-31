@@ -266,6 +266,7 @@ class Rand_cycle(Env):
 
     def step(self, action):
         terminal = False
+        truncated = False
         # action clipping is done in dp already
         # uav1
         battery1, battery2 = self.battery
@@ -398,8 +399,9 @@ class Rand_cycle(Env):
             terminal = True
         reward = reward_charge + reward_surveil + reward_battery1 + reward_battery2 + reward_monopoly1 + reward_monopoly2 + reward_fall
 
-        if self.step_count > self.max_step:
-            terminal = True
+        # adding truncated instead
+        # if self.step_count > self.max_step:
+        #     terminal = True
 
         if self.save_frames:
             if int(self.step_count) % 6 == 0:
@@ -454,7 +456,9 @@ class Rand_cycle(Env):
                 image.save(path)
                 self.frame_counter += 1
         self.step_count += 1
-        return self.observation, reward, terminal, {}
+        if self.step_count >= self.max_step:
+            truncated = True
+        return self.observation, reward, terminal, truncated, {}
 
     def render(self, action, mode="human"):
         if self.viewer is None:
