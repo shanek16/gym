@@ -328,6 +328,18 @@ register(
 )
 
 register(
+    id="Rand_cycle-v2",
+    entry_point="gym.envs.custom_env.rand_cycle_v2:Rand_cycle",
+    max_episode_steps=3600,
+)
+
+register(
+    id="Rand_cycle-v3",
+    entry_point="gym.envs.custom_env.rand_cycle_v3:Rand_cycle",
+    max_episode_steps=3600,
+)
+
+register(
     id="Plain_cycle-v0",
     entry_point="gym.envs.custom_env.plain_cycle:Plain_cycle",
     max_episode_steps=3600,
