@@ -220,7 +220,7 @@ class Rand_cycle(Env):
         self.uav2docked_time = 0
         self.charge_station_occupancy = 0
         self.surveillance = array([0, 0, 0])
-        return self.observation
+        return self.observation, {}
 
     def uav1kinematics(self, action):
         dtheta = action[0] * self.dt

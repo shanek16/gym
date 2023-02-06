@@ -10,7 +10,7 @@ from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 
 
-class Rand_cycle(Env):
+class Rand_cycle_v2(Env):
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
 
     def __init__(
