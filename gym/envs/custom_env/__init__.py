@@ -11,3 +11,5 @@ from gym.envs.custom_env.rand_cycle_v3_abs_disc import Rand_cycle_v3_abs_disc
 
 # relative position
 from gym.envs.custom_env.rand_cycle_v3_rel_disc import Rand_cycle_v3_rel_disc
+from gym.envs.custom_env.rand_cycle_v2_rel_disc import Rand_cycle_v2_rel_disc
+from gym.envs.custom_env.rand_cycle_v1_rel_disc import Rand_cycle_v1_rel_disc

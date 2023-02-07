@@ -376,6 +376,25 @@ register(
     max_episode_steps=3600,
 )
 
+# position: relativa position <-> absolute position
+register(
+    id="Rand_cycle_v0_rel_disc",
+    entry_point="gym.envs.custom_env.rand_cycle_v0_rel_disc:Rand_cycle_v0_rel_disc",
+    max_episode_steps=3600,
+)
+
+register(
+    id="Rand_cycle_v1_rel_disc",
+    entry_point="gym.envs.custom_env.rand_cycle_v1_rel_disc:Rand_cycle_v1_rel_disc",
+    max_episode_steps=3600,
+)
+
+register(
+    id="Rand_cycle_v2_rel_disc",
+    entry_point="gym.envs.custom_env.rand_cycle_v2_rel_disc:Rand_cycle_v2_rel_disc",
+    max_episode_steps=3600,
+)
+
 register(
     id="Rand_cycle_v3_rel_disc",
     entry_point="gym.envs.custom_env.rand_cycle_v3_rel_disc:Rand_cycle_v3_rel_disc",

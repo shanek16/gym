@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 class Rand_cycle_v0_abs_disc(Env):
-    metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
         self,
@@ -149,7 +149,7 @@ class Rand_cycle_v0_abs_disc(Env):
         self.episode_counter += 1
         self.step_count = 0
         if self.save_frames:
-            print(self.SAVE_FRAMES_PATH + ' created\n\n')
+            print('save_frames_path: ', self.SAVE_FRAMES_PATH)
             os.makedirs(
                 os.path.join(self.SAVE_FRAMES_PATH, f"{self.episode_counter:03d}"),
                 exist_ok=True,
@@ -345,58 +345,18 @@ class Rand_cycle_v0_abs_disc(Env):
         self.surveillance = self.cal_surveillance(action)
         self.battery = array([battery1, battery2])
 
-        # reward -=1 or 2 ~charge state
-        if self.charge_station_occupancy > 0:
-            reward_charge = -0.5
-        else:
-            reward_charge = -1
-        
         # reward ~ surveillance
-        reward_surveil = 3 * L1(self.surveillance) / self.n  # 0~3
+        reward_scale = self.m/2
+        reward_surveil = (L1(self.surveillance)-reward_scale)/ reward_scale  # -1~1
 
-        # reward ~ -danger field gradient proportional to left battery
-        # https://www.desmos.com/calculator/zogruqixel
-        r_1 = self.observation1[0]
-        r_2 = self.observation2[0]
-        battery_boarder = 1500
-        # danger field for uav1
-        if battery1 > battery_boarder:
-            reward_battery1 = 0
-        else:
-            if action[0]==0:
-                reward_battery1 = 0
-            else:
-                reward_battery1 = -0.000002*(2200 - battery1)*r_1**2
 
-        # danger field for uav2
-        if battery2 > battery_boarder:
-            reward_battery2 = 0
-        else:
-            if action[1]==0:
-                reward_battery2 = 0
-            else:
-                reward_battery2 = -0.000002*(2200 - battery2)*r_2**2
-                
-        # penalize monopoly of charge station
-        reward_monopoly1 = 0
-        if battery1 > 2500:
-            if action[0]==0:
-                reward_monopoly1 = -1
-        reward_monopoly2 = 0
-        if battery2 > 2500:
-            if action[1]==0:
-                reward_monopoly2 = -1
 
         # cirtical penalty when either one of uav falls
         reward_fall = 0
         if min(self.battery) == 0:
             reward_fall = -3600 * 2  # - max_timestep*2
             terminal = True
-        reward = reward_charge + reward_surveil + reward_battery1 + reward_battery2 + reward_monopoly1 + reward_monopoly2 + reward_fall
-
-        # adding truncated instead
-        # if self.step_count > self.max_step:
-        #     terminal = True
+        reward = reward_surveil + reward_fall
 
         if self.save_frames:
             if int(self.step_count) % 6 == 0:
@@ -412,42 +372,46 @@ class Rand_cycle_v0_abs_disc(Env):
                     self.uav1_in_charge_station
                 )
                 text0 = "uav2_in_charge_station: {}".format(self.uav2_in_charge_station)
-                text1 = "charge station occupancy: {}".format(
-                    self.charge_station_occupancy
-                )
-                text2 = "surveillance : {}".format(self.surveillance)
                 text3 = "uav1docked_time: {}".format(self.uav1docked_time)
                 text4 = "uav2docked_time: {}".format(self.uav2docked_time)
                 text5 = "uav1 action: {}".format(self.num2str[action[0]])
                 text6 = "uav2 action: {}".format(self.num2str[action[1]])
                 text7 = "uav1 battery: {}".format(self.battery[0])
                 text8 = "uav2 battery: {}".format(self.battery[1])
-                text9 = "R_c: {}".format(reward_charge)
                 text10 = "R_s: {}".format(reward_surveil)
-                text11 = "R_b1: {}".format(reward_battery1)
-                text12 = "R_b2: {}".format(reward_battery2)
-                text13 = "R_m1: {}".format(reward_monopoly1)
-                text14 = "R_m2: {}".format(reward_monopoly2)
+                # text11 = "R_b1: {}".format(reward_battery1)
+                # text12 = "R_b2: {}".format(reward_battery2)
+                # text13 = "R_m1: {}".format(reward_monopoly1)
+                # text14 = "R_m2: {}".format(reward_monopoly2)
                 text15 = "R_f: {}".format(reward_fall)
                 text16 = "Reward: {}".format(reward)
+                text17 = "r11: {0:0.0f}".format(abs(self.rel_observation(uav=1, target=1)[0]-10))
+                text18 = "r12: {0:0.0f}".format(abs(self.rel_observation(uav=1, target=2)[0]-10))
+                text19 = "r13: {0:0.0f}".format(abs(self.rel_observation(uav=1, target=3)[0]-10))
+                text20 = "r21: {0:0.0f}".format(abs(self.rel_observation(uav=2, target=1)[0]-10))
+                text21 = "r22: {0:0.0f}".format(abs(self.rel_observation(uav=2, target=2)[0]-10))
+                text22 = "r23: {0:0.0f}".format(abs(self.rel_observation(uav=2, target=3)[0]-10))
                 draw.text((0, 0), text_1, color=(200, 200, 200), font=self.font)
                 draw.text((0, 20), text0, color=(200, 200, 200), font=self.font)
-                draw.text((0, 40), text1, color=(200, 200, 200), font=self.font)
-                draw.text((0, 60), text2, color=(200, 200, 200), font=self.font)
-                draw.text((0, 80), text3, color=(200, 200, 200), font=self.font)
-                draw.text((0, 100), text4, color=(200, 200, 200), font=self.font)
-                draw.text((0, 120), text5, color=(255, 255, 0), font=self.font)
-                draw.text((0, 140), text6, color=(255, 255, 255), font=self.font)
+                draw.text((0, 60), text3, color=(200, 200, 200), font=self.font)
+                draw.text((0, 80), text4, color=(200, 200, 200), font=self.font)
+                draw.text((0, 100), text5, color=(255, 255, 0), font=self.font)
+                draw.text((0, 120), text6, color=(255, 255, 255), font=self.font)
                 draw.text((770, 0), text7, color=(255, 255, 255), font=self.font)
                 draw.text((770, 20), text8, color=(255, 255, 255), font=self.font)
-                draw.text((770, 40), text9, color=(255, 255, 255), font=self.font)
                 draw.text((770, 60), text10, color=(255, 255, 255), font=self.font)
-                draw.text((770, 80), text11, color=(255, 255, 255), font=self.font)
-                draw.text((770, 100), text12, color=(255, 255, 255), font=self.font)
-                draw.text((770, 120), text13, color=(255, 255, 255), font=self.font)
-                draw.text((770, 140), text14, color=(255, 255, 255), font=self.font)
+                # draw.text((770, 80), text11, color=(255, 255, 255), font=self.font)
+                # draw.text((770, 100), text12, color=(255, 255, 255), font=self.font)
+                # draw.text((770, 120), text13, color=(255, 255, 255), font=self.font)
+                # draw.text((770, 140), text14, color=(255, 255, 255), font=self.font)
                 draw.text((770, 160), text15, color=(255, 255, 255), font=self.font)
                 draw.text((770, 180), text16, color=(255, 255, 255), font=self.font)
+                draw.text((770, 200), text17, color=(255, 255, 255), font=self.font)
+                draw.text((770, 220), text18, color=(255, 255, 255), font=self.font)
+                draw.text((770, 240), text19, color=(255, 255, 255), font=self.font)
+                draw.text((770, 260), text20, color=(255, 255, 255), font=self.font)
+                draw.text((770, 280), text21, color=(255, 255, 255), font=self.font)
+                draw.text((770, 300), text22, color=(255, 255, 255), font=self.font)
                 image.save(path)
                 self.frame_counter += 1
         self.step_count += 1
@@ -581,15 +545,18 @@ class Rand_cycle_v0_abs_disc(Env):
     def observation1(self):
         x, y = self.uav1_state[:2]
         r = (x**2 + y**2) ** 0.5
+                    # beta                  # theta
         alpha = wrap(arctan2(y, x) - wrap(self.uav1_state[-1]) - pi)
-        return array([r, alpha, self.uav1_state[2]])  # beta
+        beta = arctan2(y, x)
+        return array([r, alpha, beta])  # beta
 
     @property
     def observation2(self):
         x, y = self.uav2_state[:2]
         r = (x**2 + y**2) ** 0.5
         alpha = wrap(arctan2(y, x) - wrap(self.uav2_state[-1]) - pi)
-        return array([r, alpha, self.uav2_state[2]])  # beta
+        beta = arctan2(y, x)
+        return array([r, alpha, beta])  # beta
 
     @property
     def target1_obs(self):
@@ -615,11 +582,9 @@ class Rand_cycle_v0_abs_disc(Env):
     # absolute position
     def rel_observation(self, uav, target):
         if uav == 1:
-            uav_x, uav_y = self.uav1_state[:2]
-            beta = self.uav1_state[2]
+            uav_x, uav_y, theta = self.uav1_state
         else:
-            uav_x, uav_y = self.uav2_state[:2]
-            beta = self.uav2_state[2]
+            uav_x, uav_y, theta = self.uav2_state
 
         if target == 1:
             target_x, target_y = self.target1_state
@@ -631,7 +596,8 @@ class Rand_cycle_v0_abs_disc(Env):
         x = uav_x - target_x
         y = uav_y - target_y
         r = (x**2 + y**2) ** 0.5
-        alpha = wrap(arctan2(y, x) - wrap(beta) - pi)
+        beta = arctan2(y, x)
+        alpha = wrap(beta - wrap(theta) - pi)
         return array([r, alpha])
 
     def cal_surveillance(self, action):
