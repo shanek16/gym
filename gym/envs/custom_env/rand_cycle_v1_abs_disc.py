@@ -14,7 +14,7 @@ from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 
 
-class Rand_cycle_v2(Env):
+class Rand_cycle_v1_abs_disc(Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
@@ -59,17 +59,15 @@ class Rand_cycle_v2(Env):
                     high=np.float32([r_max, pi]),
                     dtype=np.float32,
                 ),
-                "battery": Box(
-                    low=np.float32([0, 0]),
-                    high=np.float32([3000, 3000]),
-                    dtype=np.float32,
-                ),
+                "battery": MultiDiscrete(
+                    [3001, 3001]
+                    ),
                 "surveillance": MultiBinary(
-                    array([3,2])
+                    [3,2]
                 ),  # [Target1, Target2, Target3]/ [uav1, uav2] 1 if uav i is surveilling target j else 0
-                "previous_action": MultiDiscrete(
-                    [4,4]
-                )
+                "charge_station_occupancy": Discrete( # we could set this to Binary: free or docked
+                    3
+                ),  # 0:free, 1:uav1 docked, 2:uav2 docked
             }
         )
         self.action_space = MultiDiscrete(
@@ -93,7 +91,6 @@ class Rand_cycle_v2(Env):
         self.battery = array([3000, 3000])  # 3rounds*1200steps/round
         self.charge_station_occupancy = None
         self.surveillance = None
-        self.previous_action = None
         # for debugging
         self.uav1_in_charge_station = 0
         self.uav2_in_charge_station = 0
@@ -221,7 +218,6 @@ class Rand_cycle_v2(Env):
         self.uav1docked_time = 0
         self.uav2docked_time = 0
         self.charge_station_occupancy = 0
-        self.previous_action = [0,0]
         self.surveillance = array(
             [[0, 0],
             [0, 0],
@@ -275,7 +271,6 @@ class Rand_cycle_v2(Env):
         terminal = False
         truncated = False
         # action clipping is done in dp already
-        self.previous_action = action
         # uav1
         battery1, battery2 = self.battery
         if action[0] == 0:  # go to charge uav1
@@ -362,7 +357,7 @@ class Rand_cycle_v2(Env):
         )
         self.cal_surveillance(action)
         self.battery = array([battery1, battery2])
-        
+
         # reward ~ surveillance
         reward_scale = self.m/2
         reward_surveil = (np.sum(np.max(self.surveillance, axis=1)) - reward_scale) / reward_scale  # -1~1
@@ -695,7 +690,7 @@ class Rand_cycle_v2(Env):
             and action[1] != 0 # intent is not charging
         ):
             self.surveillance[2,1] = 1
-        
+
     @property
     def observation(self):
         dictionary_obs = {
@@ -704,9 +699,9 @@ class Rand_cycle_v2(Env):
             "target1_position": np.float32(self.target1_obs),
             "target2_position": np.float32(self.target2_obs),
             "target3_position": np.float32(self.target3_obs),
-            "battery": np.float32(self.battery),
+            "battery": self.battery,
             "surveillance": self.surveillance,
-            "previous_action": self.previous_action
+            "charge_station_occupancy": self.charge_station_occupancy,
         }
         return dictionary_obs
 
@@ -725,7 +720,7 @@ def L1(x):
 
 if __name__ == "__main__":
     # Number of actions
-    uav_env = Rand_cycle_v3()
+    uav_env = Rand_cycle()
     action_sample = uav_env.action_space.sample()
     print("action_sample: ", action_sample)
 

@@ -322,25 +322,62 @@ register(
 # Custom env
 # ----------------------------------------
 register(
-    id="Rand_cycle-v0",
-    entry_point="gym.envs.custom_env.rand_cycle:Rand_cycle",
+    id="Rand_cycle_v0",
+    entry_point="gym.envs.custom_env.rand_cycle_v0:Rand_cycle_v0",
     max_episode_steps=3600,
 )
 
 register(
-    id="Rand_cycle-v2",
+    id="Rand_cycle_v1",
+    entry_point="gym.envs.custom_env.rand_cycle_v1:Rand_cycle_v1",
+    max_episode_steps=3600,
+)
+
+register(
+    id="Rand_cycle_v2",
     entry_point="gym.envs.custom_env.rand_cycle_v2:Rand_cycle_v2",
     max_episode_steps=3600,
 )
 
 register(
-    id="Rand_cycle-v3",
+    id="Rand_cycle_v3",
     entry_point="gym.envs.custom_env.rand_cycle_v3:Rand_cycle_v3",
     max_episode_steps=3600,
 )
 
 register(
-    id="Plain_cycle-v0",
+    id="Plain_cycle_v0",
     entry_point="gym.envs.custom_env.plain_cycle:Plain_cycle",
+    max_episode_steps=3600,
+)
+
+# Battery: Discrete observation space(one-hot vector)
+register(
+    id="Rand_cycle_v0_abs_disc",
+    entry_point="gym.envs.custom_env.rand_cycle_v0_abs_disc:Rand_cycle_v0_abs_disc",
+    max_episode_steps=3600,
+)
+
+register(
+    id="Rand_cycle_v1_abs_disc",
+    entry_point="gym.envs.custom_env.rand_cycle_v1_abs_disc:Rand_cycle_v1_abs_disc",
+    max_episode_steps=3600,
+)
+
+register(
+    id="Rand_cycle_v2_abs_disc",
+    entry_point="gym.envs.custom_env.rand_cycle_v2_abs_disc:Rand_cycle_v2_abs_disc",
+    max_episode_steps=3600,
+)
+
+register(
+    id="Rand_cycle_v3_abs_disc",
+    entry_point="gym.envs.custom_env.rand_cycle_v3_abs_disc:Rand_cycle_v3_abs_disc",
+    max_episode_steps=3600,
+)
+
+register(
+    id="Rand_cycle_v3_rel_disc",
+    entry_point="gym.envs.custom_env.rand_cycle_v3_rel_disc:Rand_cycle_v3_rel_disc",
     max_episode_steps=3600,
 )

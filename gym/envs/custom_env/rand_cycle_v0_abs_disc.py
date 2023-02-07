@@ -1,18 +1,19 @@
 import os
-
-import numpy as np
 import sys
-sys.path.append('/home/shane16/Project/tianshou/gym/gym/envs/custom_env')
-# import rendering
+import numpy as np
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_file_path)
+import rendering
 from gym import Env
+from typing import Optional
+
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
-from gym.utils import seeding
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 
 
-class Rand_cycle(Env):
+class Rand_cycle_v0_abs_disc(Env):
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
 
     def __init__(
@@ -30,7 +31,7 @@ class Rand_cycle(Env):
         max_step=3600,  # one circle 1200 time steps
     ):  # m: # of target n: # of uavs
         self.observation_space = Dict(
-            {  # r, beta, theta
+            {  # r, alpha, beta
                 # only r, alpha does not imply information of abs position of uav
                 "uav1_state": Box(
                     low=np.float32([r_min, -pi, -pi]),
@@ -57,17 +58,13 @@ class Rand_cycle(Env):
                     high=np.float32([r_max, pi]),
                     dtype=np.float32,
                 ),
-                "battery": Box(
-                    low=np.float32([0, 0]),
-                    high=np.float32([3000, 3000]),
-                    dtype=np.float32,
-                ),
+                "battery": MultiDiscrete(
+                    [3001, 3001]
+                    ),
                 "surveillance": MultiBinary(
                     array([3])
                 ),  # 1 or 0 [Target1, Target2, Target3]
-                "charge_station_occupancy": Discrete(
-                    3
-                ),  # 0:free, 1:uav1 docked, 2:uav2 docked
+                "charge_station_occupancy": Discrete(3),  # 0:free, 1:uav1 docked, 2:uav2 docked
             }
         )
         self.action_space = MultiDiscrete(
@@ -101,7 +98,6 @@ class Rand_cycle(Env):
         )
         self.num2str = {0: "charge", 1: "target_1", 2: "target_2", 3: "target_3"}
 
-        self.seed()
         self.max_step = max_step
         self.viewer = None
         self.SAVE_FRAMES_PATH = "rand_frames_04/"
@@ -139,10 +135,6 @@ class Rand_cycle(Env):
             )
         )
 
-    def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
-
     def reset(
         self,
         uav1_pose=None,
@@ -150,7 +142,10 @@ class Rand_cycle(Env):
         target1_pose=None,
         target2_pose=None,
         target3_pose=None,
+        seed: Optional[int] = None,
+        options: Optional[dict] = None,
     ):
+        super().reset(seed=seed)
         self.episode_counter += 1
         self.step_count = 0
         if self.save_frames:
@@ -684,11 +679,11 @@ class Rand_cycle(Env):
     @property
     def observation(self):
         dictionary_obs = {
-            "uav1_state": self.observation1,
-            "uav2_state": self.observation2,
-            "target1_position": self.target1_obs,
-            "target2_position": self.target2_obs,
-            "target3_position": self.target3_obs,
+            "uav1_state": np.float32(self.observation1),
+            "uav2_state": np.float32(self.observation2),
+            "target1_position": np.float32(self.target1_obs),
+            "target2_position": np.float32(self.target2_obs),
+            "target3_position": np.float32(self.target3_obs),
             "battery": self.battery,
             "surveillance": self.surveillance,
             "charge_station_occupancy": self.charge_station_occupancy,

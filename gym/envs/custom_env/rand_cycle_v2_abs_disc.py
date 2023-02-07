@@ -14,7 +14,7 @@ from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 
 
-class Rand_cycle_v2(Env):
+class Rand_cycle_v2_abs_disc(Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
@@ -59,11 +59,9 @@ class Rand_cycle_v2(Env):
                     high=np.float32([r_max, pi]),
                     dtype=np.float32,
                 ),
-                "battery": Box(
-                    low=np.float32([0, 0]),
-                    high=np.float32([3000, 3000]),
-                    dtype=np.float32,
-                ),
+                "battery": MultiDiscrete(
+                    [3001, 3001]
+                    ),
                 "surveillance": MultiBinary(
                     array([3,2])
                 ),  # [Target1, Target2, Target3]/ [uav1, uav2] 1 if uav i is surveilling target j else 0
@@ -704,7 +702,7 @@ class Rand_cycle_v2(Env):
             "target1_position": np.float32(self.target1_obs),
             "target2_position": np.float32(self.target2_obs),
             "target3_position": np.float32(self.target3_obs),
-            "battery": np.float32(self.battery),
+            "battery": self.battery,
             "surveillance": self.surveillance,
             "previous_action": self.previous_action
         }
