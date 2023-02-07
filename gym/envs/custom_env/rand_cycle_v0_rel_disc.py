@@ -3,7 +3,7 @@ import sys
 import numpy as np
 current_file_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_file_path)
-import rendering
+# import rendering
 from gym import Env
 from typing import Optional
 

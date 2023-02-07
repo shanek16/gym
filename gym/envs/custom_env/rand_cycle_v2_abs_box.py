@@ -1,19 +1,20 @@
 import os
 import sys
 import numpy as np
+# import rendering
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
 
 current_file_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_file_path)
-import rendering
+
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 
 
-class Rand_cycle_v3(Env):
+class Rand_cycle_v2_abs_box(Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
@@ -63,6 +64,9 @@ class Rand_cycle_v3(Env):
                     high=np.float32([3000, 3000]),
                     dtype=np.float32,
                 ),
+                "surveillance": MultiBinary(
+                    array([3,2])
+                ),  # [Target1, Target2, Target3]/ [uav1, uav2] 1 if uav i is surveilling target j else 0
                 "previous_action": MultiDiscrete(
                     [4,4]
                 )
@@ -221,7 +225,7 @@ class Rand_cycle_v3(Env):
         self.surveillance = array(
             [[0, 0],
             [0, 0],
-            [0, 0]]
+            [0, 0]],
         )
         return self.observation, {}
 
@@ -422,6 +426,8 @@ class Rand_cycle_v3(Env):
                 text4 = "uav2docked_time: {}".format(self.uav2docked_time)
                 text5 = "uav1 action: {}".format(self.num2str[action[0]])
                 text6 = "uav2 action: {}".format(self.num2str[action[1]])
+                text2 = "surveillance :\n{}".format(self.surveillance)
+
                 text7 = "uav1 battery: {}".format(self.battery[0])
                 text8 = "uav2 battery: {}".format(self.battery[1])
                 text10 = "R_s: {}".format(reward_surveil)
@@ -443,6 +449,7 @@ class Rand_cycle_v3(Env):
                 draw.text((0, 80), text4, color=(200, 200, 200), font=self.font)
                 draw.text((0, 100), text5, color=(255, 255, 0), font=self.font)
                 draw.text((0, 120), text6, color=(255, 255, 255), font=self.font)
+                draw.text((0, 140), text2, color=(200, 200, 200), font=self.font)
                 draw.text((770, 0), text7, color=(255, 255, 255), font=self.font)
                 draw.text((770, 20), text8, color=(255, 255, 255), font=self.font)
                 draw.text((770, 60), text10, color=(255, 255, 255), font=self.font)
@@ -698,6 +705,7 @@ class Rand_cycle_v3(Env):
             "target2_position": np.float32(self.target2_obs),
             "target3_position": np.float32(self.target3_obs),
             "battery": np.float32(self.battery),
+            "surveillance": self.surveillance,
             "previous_action": self.previous_action
         }
         return dictionary_obs

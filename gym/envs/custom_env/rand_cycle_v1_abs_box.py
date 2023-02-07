@@ -1,7 +1,7 @@
 import os
 import sys
 import numpy as np
-import rendering
+# import rendering
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
@@ -14,7 +14,7 @@ from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 
 
-class Rand_cycle_v1(Env):
+class Rand_cycle_v1_abs_box(Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
