@@ -12,13 +12,15 @@ from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 
+# 1. rel - cos(alpha)
+# 2. uav1_theta -> r, alpha of charge station
 
-class Rand_cycle_v0_rel_disc(Env):
+class Rand_cycle_v0_rel_box(Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
         self,
-        r_max=40,
+        r_max=80,
         r_min=0,
         dt=0.05,
         v=1.0,
@@ -31,61 +33,53 @@ class Rand_cycle_v0_rel_disc(Env):
         max_step=3600,  # one circle 1200 time steps
     ):  # m: # of target n: # of uavs
         self.observation_space = Dict(
-            {  # r, beta'
+            {  # r, cos(alpha)'
                 "uav1_target1": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
+                    low=np.float32([r_min, -1]),
+                    high=np.float32([r_max, 1]),
                     dtype=np.float32,
                 ),
                 "uav1_target2": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
+                    low=np.float32([r_min, -1]),
+                    high=np.float32([r_max, 1]),
                     dtype=np.float32,
                 ),
                 "uav1_target3": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
+                    low=np.float32([r_min, -1]),
+                    high=np.float32([r_max, 1]),
                     dtype=np.float32,
                 ),
                 "uav2_target1": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
+                    low=np.float32([r_min, -1]),
+                    high=np.float32([r_max, 1]),
                     dtype=np.float32,
                 ),
                 "uav2_target2": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
+                    low=np.float32([r_min, -1]),
+                    high=np.float32([r_max, 1]),
                     dtype=np.float32,
                 ),
                 "uav2_target3": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
+                    low=np.float32([r_min, -1]),
+                    high=np.float32([r_max, 1]),
                     dtype=np.float32,
                 ),
-                "uav1_theta": Box(
-                    low=np.float32([-pi]),
-                    high=np.float32([pi]),
-                    dtype=np.float32,
-                ),
-                "uav2_theta": Box(
-                    low=np.float32([-pi]),
-                    high=np.float32([pi]),
-                    dtype=np.float32,
-                ),
-                # r, alpha(relative angle)
+                # r, cos(alpha)
                 "uav1_charge_station": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
+                    low=np.float32([r_min, -1]),
+                    high=np.float32([r_max, 1]),
                     dtype=np.float32,
                 ),
                 "uav2_charge_station": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
+                    low=np.float32([r_min, -1]),
+                    high=np.float32([r_max, 1]),
                     dtype=np.float32,
                 ),
-                "battery": MultiDiscrete(
-                    [3001, 3001]
-                    ),
+                "battery": Box(
+                    low=np.float32([0, 0]),
+                    high=np.float32([3000, 3000]),
+                    dtype=np.float32,
+                ),
                 "surveillance": MultiBinary(
                     array([3])
                 ),  # 1 or 0 [Target1, Target2, Target3]
@@ -699,38 +693,35 @@ class Rand_cycle_v0_rel_disc(Env):
     @property
     def observation(self):
         dictionary_obs = {
-            # r, beta
+            # r, cos(alpha)
             "uav1_target1": np.float32(
                 [self.rel_observation(uav=1, target=1)[0],
-                self.rel_observation(uav=1, target=1)[2]]
+                cos(self.rel_observation(uav=1, target=1)[1])]
                 ),
             "uav1_target2": np.float32(
                 [self.rel_observation(uav=1, target=2)[0],
-                self.rel_observation(uav=1, target=2)[2]]
+                cos(self.rel_observation(uav=1, target=2)[1])]
                 ),
             "uav1_target3": np.float32(
                 [self.rel_observation(uav=1, target=3)[0],
-                self.rel_observation(uav=1, target=3)[2]]
+                cos(self.rel_observation(uav=1, target=3)[1])]
                 ),
             "uav2_target1": np.float32(
                 [self.rel_observation(uav=2, target=1)[0],
-                self.rel_observation(uav=2, target=1)[2]]
+                cos(self.rel_observation(uav=2, target=1)[1])]
                 ),
             "uav2_target2": np.float32(
                 [self.rel_observation(uav=2, target=2)[0],
-                self.rel_observation(uav=2, target=2)[2]]
+                cos(self.rel_observation(uav=2, target=2)[1])]
                 ),
             "uav2_target3": np.float32(
                 [self.rel_observation(uav=2, target=3)[0],
-                self.rel_observation(uav=2, target=3)[2]]
+                cos(self.rel_observation(uav=2, target=3)[1])]
                 ),
-            # theta
-            "uav1_theta": np.float32(self.uav1_state[2]),
-            "uav2_theta": np.float32(self.uav1_state[2]),
             # r, alpha(relative angle)
-            "uav1_charge_station": np.float32(self.observation1[:2]),
-            "uav2_charge_station": np.float32(self.observation1[:2]),
-            "battery": self.battery,
+            "uav1_charge_station": np.float32([self.observation1[0], cos(self.observation1[1])]),
+            "uav2_charge_station": np.float32([self.observation2[0], cos(self.observation2[1])]),
+            "battery":  np.float32(self.battery),
             "surveillance": self.surveillance,
             "charge_station_occupancy": self.charge_station_occupancy,
         }

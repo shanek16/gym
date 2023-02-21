@@ -351,78 +351,27 @@ register(
     max_episode_steps=3600,
 )
 
-# Battery: Discrete observation space(one-hot vector)
+# relative position
 register(
-    id="Rand_cycle_v0_abs_disc",
-    entry_point="gym.envs.custom_env.rand_cycle_v0_abs_disc:Rand_cycle_v0_abs_disc",
+    id="Rand_cycle_v0_rel_box",
+    entry_point="gym.envs.custom_env.rand_cycle_v0_rel_box:Rand_cycle_v0_rel_box",
     max_episode_steps=3600,
 )
 
 register(
-    id="Rand_cycle_v1_abs_disc",
-    entry_point="gym.envs.custom_env.rand_cycle_v1_abs_disc:Rand_cycle_v1_abs_disc",
+    id="Rand_cycle_v1_rel_box",
+    entry_point="gym.envs.custom_env.rand_cycle_v1_rel_box:Rand_cycle_v1_rel_box",
     max_episode_steps=3600,
 )
 
 register(
-    id="Rand_cycle_v2_abs_disc",
-    entry_point="gym.envs.custom_env.rand_cycle_v2_abs_disc:Rand_cycle_v2_abs_disc",
+    id="Rand_cycle_v2_rel_box",
+    entry_point="gym.envs.custom_env.rand_cycle_v2_rel_box:Rand_cycle_v2_rel_box",
     max_episode_steps=3600,
 )
 
 register(
-    id="Rand_cycle_v3_abs_disc",
-    entry_point="gym.envs.custom_env.rand_cycle_v3_abs_disc:Rand_cycle_v3_abs_disc",
-    max_episode_steps=3600,
-)
-
-# Battery: Discrete observation space(one-hot vector)
-register(
-    id="Rand_cycle_v0_abs_bin",
-    entry_point="gym.envs.custom_env.rand_cycle_v0_abs_bin:Rand_cycle_v0_abs_bin",
-    max_episode_steps=3600,
-)
-
-# register(
-#     id="Rand_cycle_v1_abs_bin",
-#     entry_point="gym.envs.custom_env.rand_cycle_v1_abs_bin:Rand_cycle_v1_abs_bin",
-#     max_episode_steps=3600,
-# )
-
-# register(
-#     id="Rand_cycle_v2_abs_bin",
-#     entry_point="gym.envs.custom_env.rand_cycle_v2_abs_bin:Rand_cycle_v2_abs_bin",
-#     max_episode_steps=3600,
-# )
-
-# register(
-#     id="Rand_cycle_v3_abs_bin",
-#     entry_point="gym.envs.custom_env.rand_cycle_v3_abs_bin:Rand_cycle_v3_abs_bin",
-#     max_episode_steps=3600,
-# )
-
-
-# position: relativa position <-> absolute position
-register(
-    id="Rand_cycle_v0_rel_disc",
-    entry_point="gym.envs.custom_env.rand_cycle_v0_rel_disc:Rand_cycle_v0_rel_disc",
-    max_episode_steps=3600,
-)
-
-register(
-    id="Rand_cycle_v1_rel_disc",
-    entry_point="gym.envs.custom_env.rand_cycle_v1_rel_disc:Rand_cycle_v1_rel_disc",
-    max_episode_steps=3600,
-)
-
-register(
-    id="Rand_cycle_v2_rel_disc",
-    entry_point="gym.envs.custom_env.rand_cycle_v2_rel_disc:Rand_cycle_v2_rel_disc",
-    max_episode_steps=3600,
-)
-
-register(
-    id="Rand_cycle_v3_rel_disc",
-    entry_point="gym.envs.custom_env.rand_cycle_v3_rel_disc:Rand_cycle_v3_rel_disc",
+    id="Rand_cycle_v3_rel_box",
+    entry_point="gym.envs.custom_env.rand_cycle_v3_rel_box:Rand_cycle_v3_rel_box",
     max_episode_steps=3600,
 )
