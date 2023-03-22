@@ -55,6 +55,7 @@ class MultiDiscrete(Space[np.ndarray]):
         assert (self.nvec > 0).all(), "nvec (counts) have to be positive"
 
         super().__init__(self.nvec.shape, dtype, seed)
+        print('seed for action_space: ', seed)
 
     @property
     def shape(self) -> Tuple[int, ...]:
@@ -119,7 +120,6 @@ class MultiDiscrete(Space[np.ndarray]):
                         return 0
 
             return np.array(_apply_mask(mask, self.nvec), dtype=self.dtype)
-
         return (self.np_random.random(self.nvec.shape) * self.nvec).astype(self.dtype)
 
     def contains(self, x) -> bool:

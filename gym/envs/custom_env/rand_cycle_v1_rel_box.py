@@ -1,7 +1,7 @@
 import os
 import sys
 import numpy as np
-# import rendering
+import rendering
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
@@ -29,8 +29,10 @@ class Rand_cycle_v1_rel_box(Env):
         n=2,
         r_c=3,
         d_min=4.5,
-        max_step=3600,  # one circle 1200 time steps
+        max_step=3600,
+        seed = None  # one circle 1200 time steps
     ):  # m: # of target n: # of uavs
+        self.seed = seed
         self.observation_space = Dict(
             {  # r, cos(alpha)
                 "uav1_target1": Box(
@@ -87,7 +89,8 @@ class Rand_cycle_v1_rel_box(Env):
             }
         )
         self.action_space = MultiDiscrete(
-            [4, 4]
+            [4, 4],
+            seed=1 #self.seed
         )  # 0: charge, n: surveillance target n-1
         self.dt = dt
         self.v = v
@@ -165,7 +168,7 @@ class Rand_cycle_v1_rel_box(Env):
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ):
-        super().reset(seed=seed)
+        super().reset(seed=1) #self.seed
         self.episode_counter += 1
         self.step_count = 0
         if self.save_frames:
@@ -512,12 +515,20 @@ class Rand_cycle_v1_rel_box(Env):
         target1 = self.viewer.draw_circle(
             radius=2, x=target1_x, y=target1_y, filled=True
         )
-        if action[0] == 1:
-            target1.set_color(1, 1, 0)  # yellow
-        elif action[1] == 1:
-            target1.set_color(0.9, 0.9, 0.9)  # white
-        else:
-            target1.set_color(1, 0.6, 0)  # orange
+        if np.shape(action)[0] == 1: #array([[0,1]]) -> shape: (1,2)
+            if action[0][0] is 1:
+                target1.set_color(1, 1, 0)  # yellow
+            elif action[0][1] is 1:
+                target1.set_color(0.9, 0.9, 0.9)  # white
+            else:
+                target1.set_color(1, 0.6, 0)  # orange
+        else: # array([0, 1]) -> shape: (2)
+            if action[0] is 1:
+                target1.set_color(1, 1, 0)  # yellow
+            elif action[1] is 1:
+                target1.set_color(0.9, 0.9, 0.9)  # white
+            else:
+                target1.set_color(1, 0.6, 0)  # orange
 
         # target2
         target2_x, target2_y = self.target2_state
@@ -542,12 +553,21 @@ class Rand_cycle_v1_rel_box(Env):
         target2 = self.viewer.draw_circle(
             radius=2, x=target2_x, y=target2_y, filled=True
         )
-        if action[0] == 2:
-            target2.set_color(1, 1, 0)  # yellow
-        elif action[1] == 2:
-            target2.set_color(0.9, 0.9, 0.9)  # white
-        else:
-            target2.set_color(1, 0.6, 0)  # orange
+        if np.shape(action)[0] == 1: #array([[0,1]]) -> shape: (1,2)
+            if action[0][0] is 2:
+                target1.set_color(1, 1, 0)  # yellow
+            elif action[0][1] is 2:
+                target1.set_color(0.9, 0.9, 0.9)  # white
+            else:
+                target1.set_color(1, 0.6, 0)  # orange
+        else: # array([0, 1]) -> shape: (2)
+            if action[0] is 2:
+                target1.set_color(1, 1, 0)  # yellow
+            elif action[1] is 2:
+                target1.set_color(0.9, 0.9, 0.9)  # white
+            else:
+                target1.set_color(1, 0.6, 0)  # orange
+
         # target3
         target3_x, target3_y = self.target3_state
         # draw donut
@@ -571,22 +591,39 @@ class Rand_cycle_v1_rel_box(Env):
         target3 = self.viewer.draw_circle(
             radius=2, x=target3_x, y=target3_y, filled=True
         )
-        if action[0] == 3:
-            target3.set_color(1, 1, 0)  # yellow
-        elif action[1] == 3:
-            target3.set_color(0.9, 0.9, 0.9)  # white
-        else:
-            target3.set_color(1, 0.6, 0)  # orange
+        if np.shape(action)[0] == 1: #array([[0,1]]) -> shape: (1,2)
+            if action[0][0] is 3:
+                target1.set_color(1, 1, 0)  # yellow
+            elif action[0][1] is 3:
+                target1.set_color(0.9, 0.9, 0.9)  # white
+            else:
+                target1.set_color(1, 0.6, 0)  # orange
+        else: # array([0, 1]) -> shape: (2)
+            if action[0] is 3:
+                target1.set_color(1, 1, 0)  # yellow
+            elif action[1] is 3:
+                target1.set_color(0.9, 0.9, 0.9)  # white
+            else:
+                target1.set_color(1, 0.6, 0)  # orange
+
 
         # charge station @ origin
         charge_station = self.viewer.draw_circle(radius=self.r_c, filled=True)
         if self.charge_station_occupancy == 0:
-            if action[0] == 0:
-                charge_station.set_color(1, 1, 0)  # yellow
-            elif action[1] == 0:
-                charge_station.set_color(0.9, 0.9, 0.9)  # white
+            if np.shape(action)[0] == 1: #array([[0,1]]) -> shape: (1,2)
+                if action[0][0] == 0:
+                    charge_station.set_color(1, 1, 0)  # yellow
+                elif action[0][1] == 0:
+                    charge_station.set_color(0.9, 0.9, 0.9)  # white
+                else:
+                    charge_station.set_color(0.1, 0.9, 0.1)  # green
             else:
-                charge_station.set_color(0.1, 0.9, 0.1)  # green
+                if action[0] == 0:
+                    charge_station.set_color(1, 1, 0)  # yellow
+                elif action[1] == 0:
+                    charge_station.set_color(0.9, 0.9, 0.9)  # white
+                else:
+                    charge_station.set_color(0.1, 0.9, 0.1)  # green
         else:
             charge_station.set_color(0.9, 0.1, 0.1)  # red
 

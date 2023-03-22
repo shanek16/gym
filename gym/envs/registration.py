@@ -578,7 +578,7 @@ def make(
         env_creator = spec_.entry_point
     else:
         # Assume it's a string
-        env_creator = load(spec_.entry_point)
+        env_creator = load(spec_.entry_point) # should we set spec_.kwargs = _kwargs?
 
     mode = _kwargs.get("render_mode")
     apply_human_rendering = False
