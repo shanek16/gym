@@ -365,6 +365,12 @@ register(
 )
 
 register(
+    id="Rand_cycle_v1_rel_box_2target",
+    entry_point="gym.envs.custom_env.rand_cycle_v1_rel_box_2target:Rand_cycle_v1_rel_box_2target",
+    max_episode_steps=6000,
+)
+
+register(
     id="Rand_cycle_v2_rel_box",
     entry_point="gym.envs.custom_env.rand_cycle_v2_rel_box:Rand_cycle_v2_rel_box",
     max_episode_steps=3600,
