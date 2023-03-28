@@ -80,8 +80,9 @@ class Rand_cycle_v1_rel_box_2target(Env):
         )
         self.action_space = MultiDiscrete(
             [3, 3],
-            seed=1 #self.seed
+            seed=self.seed
         )  # 0: charge, n: surveillance target n-1
+        # print('seed in init action_space: ', self.seed)
         self.dt = dt
         self.v = v
         self.vdt = v * dt
@@ -156,7 +157,8 @@ class Rand_cycle_v1_rel_box_2target(Env):
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ):
-        super().reset(seed=1) #self.seed
+        super().reset(seed=self.seed) # 1
+        # print('seed in reset: ', self.seed)
         self.episode_counter += 1
         self.step_count = 0
         if self.save_frames:
