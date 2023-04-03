@@ -1,7 +1,7 @@
 import os
 import sys
 import numpy as np
-# import rendering
+import rendering
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
@@ -29,7 +29,7 @@ class Rand_cycle_v1_rel_box(Env):
         n=2,
         r_c=3,
         d_min=4.5,
-        max_step=3600,
+        max_step=6000,
         seed = None  # one circle 1200 time steps
     ):  # m: # of target n: # of uavs
         self.seed = seed
@@ -417,7 +417,7 @@ class Rand_cycle_v1_rel_box(Env):
         # cirtical penalty when either one of uav falls
         reward_fall = 0
         if min(self.battery) == 0:
-            reward_fall = -3600 * 2  # - max_timestep*2
+            reward_fall = -self.max_step * 2  # - max_timestep*2
             terminal = True
         # reward = reward_surveil + reward_battery1 + reward_battery2 + reward_monopoly1 + reward_monopoly2 + reward_fall
         reward = reward_surveil + reward_fall
@@ -706,13 +706,15 @@ class Rand_cycle_v1_rel_box(Env):
         if (
             self.d - self.l < self.rel_observation(uav=1, target=1)[0]
             and self.rel_observation(uav=1, target=1)[0] < self.d + self.l
-            and action[0] != 0 # intent is not charging
+            # and action[0] != 0 # intent is not charging
+            and self.charge_station_occupancy != 1 # uav 1 is not charging(on the way to charge is ok)
         ):
             self.surveillance[0,0] = 1 # uav1 is surveilling target 1
         if (
             self.d - self.l < self.rel_observation(uav=2, target=1)[0]
             and self.rel_observation(uav=2, target=1)[0] < self.d + self.l
-            and action[1] != 0 # intent is not charging
+            # and action[1] != 0 # intent is not charging
+            and self.charge_station_occupancy != 2 # uav 2 is not charging(on the way to charge is ok)
         ):
             self.surveillance[0,1] = 1 # uav2 is surveilling target 1
 
@@ -720,13 +722,15 @@ class Rand_cycle_v1_rel_box(Env):
         if (
             self.d - self.l < self.rel_observation(uav=1, target=2)[0]
             and self.rel_observation(uav=1, target=2)[0] < self.d + self.l
-            and action[0] != 0 # intent is not charging
+            # and action[0] != 0 # intent is not charging
+            and self.charge_station_occupancy != 1 # uav 1 is not charging(on the way to charge is ok)
         ):
             self.surveillance[1,0] = 1
         if (
             self.d - self.l < self.rel_observation(uav=2, target=2)[0]
             and self.rel_observation(uav=2, target=2)[0] < self.d + self.l
-            and action[1] != 0 # intent is not charging
+            # and action[1] != 0 # intent is not charging
+            and self.charge_station_occupancy != 2 # uav 2 is not charging(on the way to charge is ok)
         ):
             self.surveillance[1,1] = 1
         
@@ -734,13 +738,15 @@ class Rand_cycle_v1_rel_box(Env):
         if (
             self.d - self.l < self.rel_observation(uav=1, target=3)[0]
             and self.rel_observation(uav=1, target=3)[0] < self.d + self.l
-            and action[0] != 0 # intent is not charging
+            # and action[0] != 0 # intent is not charging
+            and self.charge_station_occupancy != 1 # uav 1 is not charging(on the way to charge is ok)
         ):
             self.surveillance[2,0] = 1   
         if (
             self.d - self.l < self.rel_observation(uav=2, target=3)[0]
             and self.rel_observation(uav=2, target=3)[0] < self.d + self.l
-            and action[1] != 0 # intent is not charging
+            # and action[1] != 0 # intent is not charging
+            and self.charge_station_occupancy != 2 # uav 2 is not charging(on the way to charge is ok)
         ):
             self.surveillance[2,1] = 1
 
