@@ -1,7 +1,7 @@
 import os
 import sys
 import numpy as np
-import rendering
+# import rendering
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
@@ -90,7 +90,7 @@ class Rand_cycle_v1_rel_box(Env):
         )
         self.action_space = MultiDiscrete(
             [4, 4],
-            seed=1 #self.seed
+            seed = self.seed # 1
         )  # 0: charge, n: surveillance target n-1
         self.dt = dt
         self.v = v
@@ -168,7 +168,7 @@ class Rand_cycle_v1_rel_box(Env):
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ):
-        super().reset(seed=1) #self.seed
+        super().reset(seed=self.seed) # 1
         self.episode_counter += 1
         self.step_count = 0
         if self.save_frames:
@@ -378,7 +378,7 @@ class Rand_cycle_v1_rel_box(Env):
         self.battery = array([battery1, battery2])
 
         # reward ~ surveillance
-        reward_scale = self.m/2
+        reward_scale = self.m/3
         reward_surveil = (np.sum(np.max(self.surveillance, axis=1)) - reward_scale) / reward_scale  # -1~1
 
         '''# reward ~ -danger field gradient proportional to left battery
