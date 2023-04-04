@@ -1,7 +1,7 @@
 import os
 import sys
 import numpy as np
-# import rendering
+import rendering
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
@@ -289,6 +289,7 @@ class Rand_cycle_v1_rel_box(Env):
     def step(self, action):
         terminal = False
         truncated = False
+        action = np.squeeze(action)
         # action clipping is done in dp already
         # uav1
         battery1, battery2 = self.battery
