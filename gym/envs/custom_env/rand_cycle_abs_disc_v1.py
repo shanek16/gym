@@ -1,19 +1,20 @@
 import os
 import sys
 import numpy as np
-current_file_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_file_path)
 # import rendering
 from gym import Env
+from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
 
-from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_file_path)
+
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 
 
-class Rand_cycle_v0_abs_disc(Env):
+class Rand_cycle_abs_disc_v1(Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
@@ -62,9 +63,11 @@ class Rand_cycle_v0_abs_disc(Env):
                     [3001, 3001]
                     ),
                 "surveillance": MultiBinary(
-                    array([3])
-                ),  # 1 or 0 [Target1, Target2, Target3]
-                "charge_station_occupancy": Discrete(3),  # 0:free, 1:uav1 docked, 2:uav2 docked
+                    [3,2]
+                ),  # [Target1, Target2, Target3]/ [uav1, uav2] 1 if uav i is surveilling target j else 0
+                "charge_station_occupancy": Discrete( # we could set this to Binary: free or docked
+                    3
+                ),  # 0:free, 1:uav1 docked, 2:uav2 docked
             }
         )
         self.action_space = MultiDiscrete(
@@ -100,7 +103,7 @@ class Rand_cycle_v0_abs_disc(Env):
 
         self.max_step = max_step
         self.viewer = None
-        self.SAVE_FRAMES_PATH = "rand_frames_04/"
+        self.SAVE_FRAMES_PATH = "rand_frames_04/" # example. save frames path is set at surveillance_PPO.py
         self.episode_counter = 0
         self.frame_counter = 0
         self.save_frames = False
@@ -109,10 +112,11 @@ class Rand_cycle_v0_abs_disc(Env):
         self.n_r = 800
         self.n_alpha = 360
         self.n_u = 21
+
         current_file_path = os.path.dirname(os.path.abspath(__file__))
         self.distance_keeping_result00 = np.load(current_file_path+ os.path.sep + "80_dkc_result_0.0.npz")
         self.time_optimal_result00 = np.load(current_file_path+ os.path.sep + "80_toc_result_0.0.npz")
-
+        
         self.distance_keeping_straightened_policy00 = self.distance_keeping_result00[
             "policy"
         ]
@@ -214,7 +218,11 @@ class Rand_cycle_v0_abs_disc(Env):
         self.uav1docked_time = 0
         self.uav2docked_time = 0
         self.charge_station_occupancy = 0
-        self.surveillance = array([0, 0, 0])
+        self.surveillance = array(
+            [[0, 0],
+            [0, 0],
+            [0, 0]],
+        )
         return self.observation, {}
 
     def uav1kinematics(self, action):
@@ -342,20 +350,57 @@ class Rand_cycle_v0_abs_disc(Env):
         self.charge_station_occupancy = max(
             self.uav1_in_charge_station, self.uav2_in_charge_station
         )
-        self.surveillance = self.cal_surveillance(action)
+        self.surveillance = array(
+            [[0, 0],
+            [0, 0],
+            [0, 0]],
+        )
+        self.cal_surveillance(action)
         self.battery = array([battery1, battery2])
 
         # reward ~ surveillance
         reward_scale = self.m/2
-        reward_surveil = (L1(self.surveillance)-reward_scale)/ reward_scale  # -1~1
+        reward_surveil = (np.sum(np.max(self.surveillance, axis=1)) - reward_scale) / reward_scale  # -1~1
 
+        '''# reward ~ -danger field gradient proportional to left battery
+        # https://www.desmos.com/calculator/zogruqixel
+        r_1 = self.observation1[0]
+        r_2 = self.observation2[0]
+        battery_boarder = 1500
+        # danger field for uav1
+        if battery1 > battery_boarder:
+            reward_battery1 = 0
+        else:
+            if action[0]==0:
+                reward_battery1 = 0
+            else:
+                reward_battery1 = -0.000002*(2200 - battery1)*r_1**2
 
+        # danger field for uav2
+        if battery2 > battery_boarder:
+            reward_battery2 = 0
+        else:
+            if action[1]==0:
+                reward_battery2 = 0
+            else:
+                reward_battery2 = -0.000002*(2200 - battery2)*r_2**2
+                
+        # penalize monopoly of charge station
+        reward_monopoly1 = 0
+        if battery1 > 2500:
+            if action[0]==0:
+                reward_monopoly1 = -1
+        reward_monopoly2 = 0
+        if battery2 > 2500:
+            if action[1]==0:
+                reward_monopoly2 = -1'''
 
         # cirtical penalty when either one of uav falls
         reward_fall = 0
         if min(self.battery) == 0:
             reward_fall = -3600 * 2  # - max_timestep*2
             terminal = True
+        # reward = reward_surveil + reward_battery1 + reward_battery2 + reward_monopoly1 + reward_monopoly2 + reward_fall
         reward = reward_surveil + reward_fall
 
         if self.save_frames:
@@ -376,6 +421,8 @@ class Rand_cycle_v0_abs_disc(Env):
                 text4 = "uav2docked_time: {}".format(self.uav2docked_time)
                 text5 = "uav1 action: {}".format(self.num2str[action[0]])
                 text6 = "uav2 action: {}".format(self.num2str[action[1]])
+                text2 = "surveillance :\n{}".format(self.surveillance)
+
                 text7 = "uav1 battery: {}".format(self.battery[0])
                 text8 = "uav2 battery: {}".format(self.battery[1])
                 text10 = "R_s: {}".format(reward_surveil)
@@ -397,6 +444,7 @@ class Rand_cycle_v0_abs_disc(Env):
                 draw.text((0, 80), text4, color=(200, 200, 200), font=self.font)
                 draw.text((0, 100), text5, color=(255, 255, 0), font=self.font)
                 draw.text((0, 120), text6, color=(255, 255, 255), font=self.font)
+                draw.text((0, 140), text2, color=(200, 200, 200), font=self.font)
                 draw.text((770, 0), text7, color=(255, 255, 255), font=self.font)
                 draw.text((770, 20), text8, color=(255, 255, 255), font=self.font)
                 draw.text((770, 60), text10, color=(255, 255, 255), font=self.font)
@@ -431,7 +479,7 @@ class Rand_cycle_v0_abs_disc(Env):
         outer_donut = self.viewer.draw_circle(
             radius=self.d + self.l, x=target1_x, y=target1_y, filled=True
         )
-        if self.surveillance[0] == 1:
+        if np.max(self.surveillance[0]) == 1:
             outer_donut.set_color(0.6, 0.6, 1.0, 0.3)  # lighter
         else:
             outer_donut.set_color(0.3, 0.3, 0.9, 0.3)  # transparent blue
@@ -461,7 +509,7 @@ class Rand_cycle_v0_abs_disc(Env):
         outer_donut = self.viewer.draw_circle(
             radius=self.d + self.l, x=target2_x, y=target2_y, filled=True
         )
-        if self.surveillance[1] == 1:
+        if np.max(self.surveillance[1]) == 1:
             outer_donut.set_color(0.6, 0.6, 1.0, 0.3)  # lighter
         else:
             outer_donut.set_color(0.3, 0.3, 0.9, 0.3)  # transparent blue
@@ -490,7 +538,7 @@ class Rand_cycle_v0_abs_disc(Env):
         outer_donut = self.viewer.draw_circle(
             radius=self.d + self.l, x=target3_x, y=target3_y, filled=True
         )
-        if self.surveillance[2] == 1:
+        if np.max(self.surveillance[2]) == 1:
             outer_donut.set_color(0.6, 0.6, 1.0, 0.3)  # lighter
         else:
             outer_donut.set_color(0.3, 0.3, 0.9, 0.3)  # transparent blue
@@ -606,41 +654,42 @@ class Rand_cycle_v0_abs_disc(Env):
             self.d - self.l < self.rel_observation(uav=1, target=1)[0]
             and self.rel_observation(uav=1, target=1)[0] < self.d + self.l
             and action[0] != 0 # intent is not charging
-        ) or (
+        ):
+            self.surveillance[0,0] = 1 # uav1 is surveilling target 1
+        if (
             self.d - self.l < self.rel_observation(uav=2, target=1)[0]
             and self.rel_observation(uav=2, target=1)[0] < self.d + self.l
             and action[1] != 0 # intent is not charging
         ):
-            s1 = 1
-        else:
-            s1 = 0
+            self.surveillance[0,1] = 1 # uav2 is surveilling target 1
+
         # is any uav surveilling target 2?
         if (
             self.d - self.l < self.rel_observation(uav=1, target=2)[0]
             and self.rel_observation(uav=1, target=2)[0] < self.d + self.l
             and action[0] != 0 # intent is not charging
-        ) or (
+        ):
+            self.surveillance[1,0] = 1
+        if (
             self.d - self.l < self.rel_observation(uav=2, target=2)[0]
             and self.rel_observation(uav=2, target=2)[0] < self.d + self.l
             and action[1] != 0 # intent is not charging
         ):
-            s2 = 1
-        else:
-            s2 = 0
+            self.surveillance[1,1] = 1
+        
         # is any uav surveilling target 3?
         if (
             self.d - self.l < self.rel_observation(uav=1, target=3)[0]
             and self.rel_observation(uav=1, target=3)[0] < self.d + self.l
             and action[0] != 0 # intent is not charging
-        ) or (
+        ):
+            self.surveillance[2,0] = 1   
+        if (
             self.d - self.l < self.rel_observation(uav=2, target=3)[0]
             and self.rel_observation(uav=2, target=3)[0] < self.d + self.l
             and action[1] != 0 # intent is not charging
         ):
-            s3 = 1
-        else:
-            s3 = 0
-        return array([s1, s2, s3])
+            self.surveillance[2,1] = 1
 
     @property
     def observation(self):

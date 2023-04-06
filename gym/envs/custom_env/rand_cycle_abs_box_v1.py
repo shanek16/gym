@@ -14,7 +14,7 @@ from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 
 
-class Rand_cycle_v2_rel_disc(Env):
+class Rand_cycle_abs_box_v1(Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
@@ -32,67 +32,44 @@ class Rand_cycle_v2_rel_disc(Env):
         max_step=3600,  # one circle 1200 time steps
     ):  # m: # of target n: # of uavs
         self.observation_space = Dict(
-            {  # r, beta'
-                "uav1_target1": Box(
+            {  # r, alpha, beta
+                # only r, alpha does not imply information of abs position of uav
+                "uav1_state": Box(
+                    low=np.float32([r_min, -pi, -pi]),
+                    high=np.float32([r_max, pi, pi]),
+                    dtype=np.float32,
+                ),
+                "uav2_state": Box(
+                    low=np.float32([r_min, -pi, -pi]),
+                    high=np.float32([r_max, pi, pi]),
+                    dtype=np.float32,
+                ),
+                "target1_position": Box(
                     low=np.float32([r_min, -pi]),
                     high=np.float32([r_max, pi]),
                     dtype=np.float32,
                 ),
-                "uav1_target2": Box(
+                "target2_position": Box(
                     low=np.float32([r_min, -pi]),
                     high=np.float32([r_max, pi]),
                     dtype=np.float32,
                 ),
-                "uav1_target3": Box(
+                "target3_position": Box(
                     low=np.float32([r_min, -pi]),
                     high=np.float32([r_max, pi]),
                     dtype=np.float32,
                 ),
-                "uav2_target1": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
+                "battery": Box(
+                    low=np.float32([0, 0]),
+                    high=np.float32([3000, 3000]),
                     dtype=np.float32,
                 ),
-                "uav2_target2": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
-                    dtype=np.float32,
-                ),
-                "uav2_target3": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
-                    dtype=np.float32,
-                ),
-                "uav1_theta": Box(
-                    low=np.float32([-pi]),
-                    high=np.float32([pi]),
-                    dtype=np.float32,
-                ),
-                "uav2_theta": Box(
-                    low=np.float32([-pi]),
-                    high=np.float32([pi]),
-                    dtype=np.float32,
-                ),
-                # r, alpha(relative angle)
-                "uav1_charge_station": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
-                    dtype=np.float32,
-                ),
-                "uav2_charge_station": Box(
-                    low=np.float32([r_min, -pi]),
-                    high=np.float32([r_max, pi]),
-                    dtype=np.float32,
-                ),
-                "battery": MultiDiscrete(
-                    [3001, 3001]
-                    ),
                 "surveillance": MultiBinary(
-                    array([3,2])
+                    [3,2]
                 ),  # [Target1, Target2, Target3]/ [uav1, uav2] 1 if uav i is surveilling target j else 0
-                "previous_action": MultiDiscrete(
-                    [4,4]
-                )
+                "charge_station_occupancy": Discrete( # we could set this to Binary: free or docked
+                    3
+                ),  # 0:free, 1:uav1 docked, 2:uav2 docked
             }
         )
         self.action_space = MultiDiscrete(
@@ -116,7 +93,6 @@ class Rand_cycle_v2_rel_disc(Env):
         self.battery = array([3000, 3000])  # 3rounds*1200steps/round
         self.charge_station_occupancy = None
         self.surveillance = None
-        self.previous_action = None
         # for debugging
         self.uav1_in_charge_station = 0
         self.uav2_in_charge_station = 0
@@ -244,7 +220,6 @@ class Rand_cycle_v2_rel_disc(Env):
         self.uav1docked_time = 0
         self.uav2docked_time = 0
         self.charge_station_occupancy = 0
-        self.previous_action = [0,0]
         self.surveillance = array(
             [[0, 0],
             [0, 0],
@@ -298,7 +273,6 @@ class Rand_cycle_v2_rel_disc(Env):
         terminal = False
         truncated = False
         # action clipping is done in dp already
-        self.previous_action = action
         # uav1
         battery1, battery2 = self.battery
         if action[0] == 0:  # go to charge uav1
@@ -323,19 +297,19 @@ class Rand_cycle_v2_rel_disc(Env):
             self.uav1_in_charge_station = 0
             self.uav1docked_time = 0
             battery1 -= 1
-            w1_action = self.dkc_get_action(self.rel_observation(uav=1, target=1)[:2])
+            w1_action = self.dkc_get_action(self.rel_observation(uav=1, target=1))
             self.uav1kinematics(w1_action)
         elif action[0] == 2:  # surveil target2
             self.uav1_in_charge_station = 0
             self.uav1docked_time = 0
             battery1 -= 1
-            w1_action = self.dkc_get_action(self.rel_observation(uav=1, target=2)[:2])
+            w1_action = self.dkc_get_action(self.rel_observation(uav=1, target=2))
             self.uav1kinematics(w1_action)
         else:  # surveil target3
             self.uav1_in_charge_station = 0
             self.uav1docked_time = 0
             battery1 -= 1
-            w1_action = self.dkc_get_action(self.rel_observation(uav=1, target=3)[:2])
+            w1_action = self.dkc_get_action(self.rel_observation(uav=1, target=3))
             self.uav1kinematics(w1_action)
 
         # uav2
@@ -361,19 +335,19 @@ class Rand_cycle_v2_rel_disc(Env):
             self.uav2_in_charge_station = 0
             self.uav2docked_time = 0
             battery2 -= 1
-            w2_action = self.dkc_get_action(self.rel_observation(uav=2, target=1)[:2])
+            w2_action = self.dkc_get_action(self.rel_observation(uav=2, target=1))
             self.uav2kinematics(w2_action)
         elif action[1] == 2:  # surveil target2
             self.uav2_in_charge_station = 0
             self.uav2docked_time = 0
             battery2 -= 1
-            w2_action = self.dkc_get_action(self.rel_observation(uav=2, target=2)[:2])
+            w2_action = self.dkc_get_action(self.rel_observation(uav=2, target=2))
             self.uav2kinematics(w2_action)
         else:  # surveil target3
             self.uav2_in_charge_station = 0
             self.uav2docked_time = 0
             battery2 -= 1
-            w2_action = self.dkc_get_action(self.rel_observation(uav=2, target=3)[:2])
+            w2_action = self.dkc_get_action(self.rel_observation(uav=2, target=3))
             self.uav2kinematics(w2_action)
         self.charge_station_occupancy = max(
             self.uav1_in_charge_station, self.uav2_in_charge_station
@@ -385,7 +359,7 @@ class Rand_cycle_v2_rel_disc(Env):
         )
         self.cal_surveillance(action)
         self.battery = array([battery1, battery2])
-        
+
         # reward ~ surveillance
         reward_scale = self.m/2
         reward_surveil = (np.sum(np.max(self.surveillance, axis=1)) - reward_scale) / reward_scale  # -1~1
@@ -428,7 +402,6 @@ class Rand_cycle_v2_rel_disc(Env):
         if min(self.battery) == 0:
             reward_fall = -3600 * 2  # - max_timestep*2
             terminal = True
-        # reward = reward_surveil + reward_battery1 + reward_battery2 + reward_monopoly1 + reward_monopoly2 + reward_fall
         reward = reward_surveil + reward_fall
 
         if self.save_frames:
@@ -674,7 +647,7 @@ class Rand_cycle_v2_rel_disc(Env):
         r = (x**2 + y**2) ** 0.5
         beta = arctan2(y, x)
         alpha = wrap(beta - wrap(theta) - pi)
-        return array([r, alpha, beta])
+        return array([r, alpha])
 
     def cal_surveillance(self, action):
         # is any uav surveilling target 1?
@@ -718,44 +691,18 @@ class Rand_cycle_v2_rel_disc(Env):
             and action[1] != 0 # intent is not charging
         ):
             self.surveillance[2,1] = 1
-        
+
     @property
     def observation(self):
         dictionary_obs = {
-            # r, beta
-            "uav1_target1": np.float32(
-                [self.rel_observation(uav=1, target=1)[0],
-                self.rel_observation(uav=1, target=1)[2]]
-                ),
-            "uav1_target2": np.float32(
-                [self.rel_observation(uav=1, target=2)[0],
-                self.rel_observation(uav=1, target=2)[2]]
-                ),
-            "uav1_target3": np.float32(
-                [self.rel_observation(uav=1, target=3)[0],
-                self.rel_observation(uav=1, target=3)[2]]
-                ),
-            "uav2_target1": np.float32(
-                [self.rel_observation(uav=2, target=1)[0],
-                self.rel_observation(uav=2, target=1)[2]]
-                ),
-            "uav2_target2": np.float32(
-                [self.rel_observation(uav=2, target=2)[0],
-                self.rel_observation(uav=2, target=2)[2]]
-                ),
-            "uav2_target3": np.float32(
-                [self.rel_observation(uav=2, target=3)[0],
-                self.rel_observation(uav=2, target=3)[2]]
-                ),
-            # theta
-            "uav1_theta": np.float32(self.uav1_state[2]),
-            "uav2_theta": np.float32(self.uav1_state[2]),
-            # r, alpha(relative angle)
-            "uav1_charge_station": np.float32(self.observation1[:2]),
-            "uav2_charge_station": np.float32(self.observation1[:2]),
-            "battery": self.battery,
+            "uav1_state": np.float32(self.observation1),
+            "uav2_state": np.float32(self.observation2),
+            "target1_position": np.float32(self.target1_obs),
+            "target2_position": np.float32(self.target2_obs),
+            "target3_position": np.float32(self.target3_obs),
+            "battery": np.float32(self.battery),
             "surveillance": self.surveillance,
-            "previous_action": self.previous_action
+            "charge_station_occupancy": self.charge_station_occupancy,
         }
         return dictionary_obs
 
@@ -774,7 +721,7 @@ def L1(x):
 
 if __name__ == "__main__":
     # Number of actions
-    uav_env = gym.make("Rand_cycle_v2_rel_disc")
+    uav_env = Rand_cycle()
     action_sample = uav_env.action_space.sample()
     print("action_sample: ", action_sample)
 

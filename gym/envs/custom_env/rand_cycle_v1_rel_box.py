@@ -30,7 +30,7 @@ class Rand_cycle_v1_rel_box(Env):
         r_c=3,
         d_min=4.5,
         max_step=6000,
-        seed = None  # one circle 1200 time steps
+        seed = 1 # one circle 1200 time steps
     ):  # m: # of target n: # of uavs
         self.seed = seed
         self.observation_space = Dict(
@@ -382,39 +382,6 @@ class Rand_cycle_v1_rel_box(Env):
         reward_scale = self.m/3
         reward_surveil = (np.sum(np.max(self.surveillance, axis=1)) - reward_scale) / reward_scale  # -1~1
 
-        '''# reward ~ -danger field gradient proportional to left battery
-        # https://www.desmos.com/calculator/zogruqixel
-        r_1 = self.observation1[0]
-        r_2 = self.observation2[0]
-        battery_boarder = 1500
-        # danger field for uav1
-        if battery1 > battery_boarder:
-            reward_battery1 = 0
-        else:
-            if action[0]==0:
-                reward_battery1 = 0
-            else:
-                reward_battery1 = -0.000002*(2200 - battery1)*r_1**2
-
-        # danger field for uav2
-        if battery2 > battery_boarder:
-            reward_battery2 = 0
-        else:
-            if action[1]==0:
-                reward_battery2 = 0
-            else:
-                reward_battery2 = -0.000002*(2200 - battery2)*r_2**2
-                
-        # penalize monopoly of charge station
-        reward_monopoly1 = 0
-        if battery1 > 2500:
-            if action[0]==0:
-                reward_monopoly1 = -1
-        reward_monopoly2 = 0
-        if battery2 > 2500:
-            if action[1]==0:
-                reward_monopoly2 = -1'''
-
         # cirtical penalty when either one of uav falls
         reward_fall = 0
         if min(self.battery) == 0:
@@ -433,53 +400,58 @@ class Rand_cycle_v1_rel_box(Env):
                 )
                 image = Image.fromarray(image)
                 draw = ImageDraw.Draw(image)
-                text_1 = "uav1_in_charge_station: {}".format(
-                    self.uav1_in_charge_station
-                )
-                text0 = "uav2_in_charge_station: {}".format(self.uav2_in_charge_station)
-                text3 = "uav1docked_time: {}".format(self.uav1docked_time)
-                text4 = "uav2docked_time: {}".format(self.uav2docked_time)
-                text5 = "uav1 action: {}".format(self.num2str[action[0]])
-                text6 = "uav2 action: {}".format(self.num2str[action[1]])
-                text2 = "surveillance :\n{}".format(self.surveillance)
+                # left upper corner
+                text0 = "uav1_in_charge_station: {}".format(self.uav1_in_charge_station)
+                text1 = "uav2_in_charge_station: {}".format(self.uav2_in_charge_station)
 
+                text2 = "uav1docked_time: {}".format(self.uav1docked_time)
+                text3 = "uav2docked_time: {}".format(self.uav2docked_time)
+
+                text4 = "uav1 action: {}".format(self.num2str[action[0]])
+                text5 = "uav2 action: {}".format(self.num2str[action[1]])
+
+                text6 = "surveillance :\n{}".format(self.surveillance)
+                # right uppper corner
                 text7 = "uav1 battery: {}".format(self.battery[0])
                 text8 = "uav2 battery: {}".format(self.battery[1])
-                text10 = "R_s: {}".format(reward_surveil)
-                # text11 = "R_b1: {}".format(reward_battery1)
-                # text12 = "R_b2: {}".format(reward_battery2)
-                # text13 = "R_m1: {}".format(reward_monopoly1)
-                # text14 = "R_m2: {}".format(reward_monopoly2)
-                text15 = "R_f: {}".format(reward_fall)
-                text16 = "Reward: {}".format(reward)
-                text17 = "r11: {0:0.0f}".format(abs(self.rel_observation(uav=1, target=1)[0]-10))
-                text18 = "r12: {0:0.0f}".format(abs(self.rel_observation(uav=1, target=2)[0]-10))
-                text19 = "r13: {0:0.0f}".format(abs(self.rel_observation(uav=1, target=3)[0]-10))
-                text20 = "r21: {0:0.0f}".format(abs(self.rel_observation(uav=2, target=1)[0]-10))
-                text21 = "r22: {0:0.0f}".format(abs(self.rel_observation(uav=2, target=2)[0]-10))
-                text22 = "r23: {0:0.0f}".format(abs(self.rel_observation(uav=2, target=3)[0]-10))
-                draw.text((0, 0), text_1, color=(200, 200, 200), font=self.font)
-                draw.text((0, 20), text0, color=(200, 200, 200), font=self.font)
-                draw.text((0, 60), text3, color=(200, 200, 200), font=self.font)
-                draw.text((0, 80), text4, color=(200, 200, 200), font=self.font)
-                draw.text((0, 100), text5, color=(255, 255, 0), font=self.font)
-                draw.text((0, 120), text6, color=(255, 255, 255), font=self.font)
-                draw.text((0, 140), text2, color=(200, 200, 200), font=self.font)
+
+                text12 = "r11: {0:0.0f}".format(abs(self.rel_observation(uav=1, target=1)[0]-10))
+                text13 = "r12: {0:0.0f}".format(abs(self.rel_observation(uav=1, target=2)[0]-10))
+                text14 = "r13: {0:0.0f}".format(abs(self.rel_observation(uav=1, target=3)[0]-10))
+                text15 = "r21: {0:0.0f}".format(abs(self.rel_observation(uav=2, target=1)[0]-10))
+                text16 = "r22: {0:0.0f}".format(abs(self.rel_observation(uav=2, target=2)[0]-10))
+                text17 = "r23: {0:0.0f}".format(abs(self.rel_observation(uav=2, target=3)[0]-10))
+
+                text9 = "Reward_surveil: {}".format(reward_surveil)
+                text10 = "Reward_fall: {}".format(reward_fall)
+                text11 = "Reward: {}".format(reward)
+
+
+                draw.text((0, 0), text0, color=(200, 200, 200), font=self.font)
+                draw.text((0, 20), text1, color=(200, 200, 200), font=self.font)
+
+                draw.text((0, 60), text2, color=(200, 200, 200), font=self.font)
+                draw.text((0, 80), text3, color=(200, 200, 200), font=self.font)
+
+                draw.text((0, 120), text4, color=(255, 255, 0), font=self.font)
+                draw.text((0, 140), text5, color=(255, 255, 255), font=self.font)
+
+                draw.text((0, 180), text6, color=(200, 200, 200), font=self.font)
+                # right uppper corner
                 draw.text((770, 0), text7, color=(255, 255, 255), font=self.font)
                 draw.text((770, 20), text8, color=(255, 255, 255), font=self.font)
-                draw.text((770, 60), text10, color=(255, 255, 255), font=self.font)
-                # draw.text((770, 80), text11, color=(255, 255, 255), font=self.font)
-                # draw.text((770, 100), text12, color=(255, 255, 255), font=self.font)
-                # draw.text((770, 120), text13, color=(255, 255, 255), font=self.font)
-                # draw.text((770, 140), text14, color=(255, 255, 255), font=self.font)
-                draw.text((770, 160), text15, color=(255, 255, 255), font=self.font)
-                draw.text((770, 180), text16, color=(255, 255, 255), font=self.font)
-                draw.text((770, 200), text17, color=(255, 255, 255), font=self.font)
-                draw.text((770, 220), text18, color=(255, 255, 255), font=self.font)
-                draw.text((770, 240), text19, color=(255, 255, 255), font=self.font)
-                draw.text((770, 260), text20, color=(255, 255, 255), font=self.font)
-                draw.text((770, 280), text21, color=(255, 255, 255), font=self.font)
-                draw.text((770, 300), text22, color=(255, 255, 255), font=self.font)
+
+                draw.text((770, 60), text12, color=(255, 255, 255), font=self.font)
+                draw.text((770, 80), text13, color=(255, 255, 255), font=self.font)
+                draw.text((770, 100), text14, color=(255, 255, 255), font=self.font)
+                draw.text((770, 120), text15, color=(255, 255, 255), font=self.font)
+                draw.text((770, 140), text16, color=(255, 255, 255), font=self.font)
+                draw.text((770, 160), text17, color=(255, 255, 255), font=self.font)
+
+                draw.text((750, 200), text9, color=(255, 255, 255), font=self.font)
+                draw.text((750, 220), text10, color=(255, 255, 255), font=self.font)
+                draw.text((750, 240), text11, color=(255, 255, 255), font=self.font)
+                
                 image.save(path)
                 self.frame_counter += 1
         self.step_count += 1
@@ -517,16 +489,16 @@ class Rand_cycle_v1_rel_box(Env):
             radius=2, x=target1_x, y=target1_y, filled=True
         )
         if np.shape(action)[0] == 1: #array([[0,1]]) -> shape: (1,2)
-            if action[0][0] is 1:
+            if action[0][0] == 1:
                 target1.set_color(1, 1, 0)  # yellow
-            elif action[0][1] is 1:
+            elif action[0][1] == 1:
                 target1.set_color(0.9, 0.9, 0.9)  # white
             else:
                 target1.set_color(1, 0.6, 0)  # orange
         else: # array([0, 1]) -> shape: (2)
-            if action[0] is 1:
+            if action[0] == 1:
                 target1.set_color(1, 1, 0)  # yellow
-            elif action[1] is 1:
+            elif action[1] == 1:
                 target1.set_color(0.9, 0.9, 0.9)  # white
             else:
                 target1.set_color(1, 0.6, 0)  # orange
@@ -555,19 +527,19 @@ class Rand_cycle_v1_rel_box(Env):
             radius=2, x=target2_x, y=target2_y, filled=True
         )
         if np.shape(action)[0] == 1: #array([[0,1]]) -> shape: (1,2)
-            if action[0][0] is 2:
-                target1.set_color(1, 1, 0)  # yellow
-            elif action[0][1] is 2:
-                target1.set_color(0.9, 0.9, 0.9)  # white
+            if action[0][0] == 2:
+                target2.set_color(1, 1, 0)  # yellow
+            elif action[0][1] == 2:
+                target2.set_color(0.9, 0.9, 0.9)  # white
             else:
-                target1.set_color(1, 0.6, 0)  # orange
+                target2.set_color(1, 0.6, 0)  # orange
         else: # array([0, 1]) -> shape: (2)
-            if action[0] is 2:
-                target1.set_color(1, 1, 0)  # yellow
-            elif action[1] is 2:
-                target1.set_color(0.9, 0.9, 0.9)  # white
+            if action[0] == 2:
+                target2.set_color(1, 1, 0)  # yellow
+            elif action[1] == 2:
+                target2.set_color(0.9, 0.9, 0.9)  # white
             else:
-                target1.set_color(1, 0.6, 0)  # orange
+                target2.set_color(1, 0.6, 0)  # orange
 
         # target3
         target3_x, target3_y = self.target3_state
@@ -593,19 +565,19 @@ class Rand_cycle_v1_rel_box(Env):
             radius=2, x=target3_x, y=target3_y, filled=True
         )
         if np.shape(action)[0] == 1: #array([[0,1]]) -> shape: (1,2)
-            if action[0][0] is 3:
-                target1.set_color(1, 1, 0)  # yellow
-            elif action[0][1] is 3:
-                target1.set_color(0.9, 0.9, 0.9)  # white
+            if action[0][0] == 3:
+                target3.set_color(1, 1, 0)  # yellow
+            elif action[0][1] == 3:
+                target3.set_color(0.9, 0.9, 0.9)  # white
             else:
-                target1.set_color(1, 0.6, 0)  # orange
+                target3.set_color(1, 0.6, 0)  # orange
         else: # array([0, 1]) -> shape: (2)
-            if action[0] is 3:
-                target1.set_color(1, 1, 0)  # yellow
-            elif action[1] is 3:
-                target1.set_color(0.9, 0.9, 0.9)  # white
+            if action[0] == 3:
+                target3.set_color(1, 1, 0)  # yellow
+            elif action[1] == 3:
+                target3.set_color(0.9, 0.9, 0.9)  # white
             else:
-                target1.set_color(1, 0.6, 0)  # orange
+                target3.set_color(1, 0.6, 0)  # orange
 
 
         # charge station @ origin

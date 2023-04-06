@@ -1,20 +1,19 @@
 import os
 import sys
 import numpy as np
-# import rendering
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
 
 current_file_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_file_path)
-
+# import rendering
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 
 
-class Rand_cycle_v1_abs_box(Env):
+class Rand_cycle_abs_box_v3(Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
@@ -64,12 +63,9 @@ class Rand_cycle_v1_abs_box(Env):
                     high=np.float32([3000, 3000]),
                     dtype=np.float32,
                 ),
-                "surveillance": MultiBinary(
-                    [3,2]
-                ),  # [Target1, Target2, Target3]/ [uav1, uav2] 1 if uav i is surveilling target j else 0
-                "charge_station_occupancy": Discrete( # we could set this to Binary: free or docked
-                    3
-                ),  # 0:free, 1:uav1 docked, 2:uav2 docked
+                "previous_action": MultiDiscrete(
+                    [4,4]
+                )
             }
         )
         self.action_space = MultiDiscrete(
@@ -93,6 +89,7 @@ class Rand_cycle_v1_abs_box(Env):
         self.battery = array([3000, 3000])  # 3rounds*1200steps/round
         self.charge_station_occupancy = None
         self.surveillance = None
+        self.previous_action = None
         # for debugging
         self.uav1_in_charge_station = 0
         self.uav2_in_charge_station = 0
@@ -220,10 +217,11 @@ class Rand_cycle_v1_abs_box(Env):
         self.uav1docked_time = 0
         self.uav2docked_time = 0
         self.charge_station_occupancy = 0
+        self.previous_action = [0,0]
         self.surveillance = array(
             [[0, 0],
             [0, 0],
-            [0, 0]],
+            [0, 0]]
         )
         return self.observation, {}
 
@@ -273,6 +271,7 @@ class Rand_cycle_v1_abs_box(Env):
         terminal = False
         truncated = False
         # action clipping is done in dp already
+        self.previous_action = action
         # uav1
         battery1, battery2 = self.battery
         if action[0] == 0:  # go to charge uav1
@@ -359,7 +358,7 @@ class Rand_cycle_v1_abs_box(Env):
         )
         self.cal_surveillance(action)
         self.battery = array([battery1, battery2])
-
+        
         # reward ~ surveillance
         reward_scale = self.m/2
         reward_surveil = (np.sum(np.max(self.surveillance, axis=1)) - reward_scale) / reward_scale  # -1~1
@@ -402,6 +401,7 @@ class Rand_cycle_v1_abs_box(Env):
         if min(self.battery) == 0:
             reward_fall = -3600 * 2  # - max_timestep*2
             terminal = True
+        # reward = reward_surveil + reward_battery1 + reward_battery2 + reward_monopoly1 + reward_monopoly2 + reward_fall
         reward = reward_surveil + reward_fall
 
         if self.save_frames:
@@ -422,8 +422,6 @@ class Rand_cycle_v1_abs_box(Env):
                 text4 = "uav2docked_time: {}".format(self.uav2docked_time)
                 text5 = "uav1 action: {}".format(self.num2str[action[0]])
                 text6 = "uav2 action: {}".format(self.num2str[action[1]])
-                text2 = "surveillance :\n{}".format(self.surveillance)
-
                 text7 = "uav1 battery: {}".format(self.battery[0])
                 text8 = "uav2 battery: {}".format(self.battery[1])
                 text10 = "R_s: {}".format(reward_surveil)
@@ -445,7 +443,6 @@ class Rand_cycle_v1_abs_box(Env):
                 draw.text((0, 80), text4, color=(200, 200, 200), font=self.font)
                 draw.text((0, 100), text5, color=(255, 255, 0), font=self.font)
                 draw.text((0, 120), text6, color=(255, 255, 255), font=self.font)
-                draw.text((0, 140), text2, color=(200, 200, 200), font=self.font)
                 draw.text((770, 0), text7, color=(255, 255, 255), font=self.font)
                 draw.text((770, 20), text8, color=(255, 255, 255), font=self.font)
                 draw.text((770, 60), text10, color=(255, 255, 255), font=self.font)
@@ -691,7 +688,7 @@ class Rand_cycle_v1_abs_box(Env):
             and action[1] != 0 # intent is not charging
         ):
             self.surveillance[2,1] = 1
-
+        
     @property
     def observation(self):
         dictionary_obs = {
@@ -701,8 +698,7 @@ class Rand_cycle_v1_abs_box(Env):
             "target2_position": np.float32(self.target2_obs),
             "target3_position": np.float32(self.target3_obs),
             "battery": np.float32(self.battery),
-            "surveillance": self.surveillance,
-            "charge_station_occupancy": self.charge_station_occupancy,
+            "previous_action": self.previous_action
         }
         return dictionary_obs
 
@@ -721,7 +717,7 @@ def L1(x):
 
 if __name__ == "__main__":
     # Number of actions
-    uav_env = Rand_cycle()
+    uav_env = Rand_cycle_v3()
     action_sample = uav_env.action_space.sample()
     print("action_sample: ", action_sample)
 

@@ -1,20 +1,20 @@
 import os
 import sys
+import gym
 import numpy as np
-# import rendering
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
 
 current_file_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_file_path)
-
+# import rendering
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 
 
-class Rand_cycle_v2_rel_box(Env):
+class Rand_cycle_rel_box_v3(Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
@@ -32,7 +32,7 @@ class Rand_cycle_v2_rel_box(Env):
         max_step=3600,  # one circle 1200 time steps
     ):  # m: # of target n: # of uavs
         self.observation_space = Dict(
-            {  # r, beta'
+            {  # r, cos(alpha)
                 "uav1_target1": Box(
                     low=np.float32([r_min, -1]),
                     high=np.float32([r_max, 1]),
@@ -78,9 +78,6 @@ class Rand_cycle_v2_rel_box(Env):
                     high=np.float32([3000, 3000]),
                     dtype=np.float32,
                 ),
-                "surveillance": MultiBinary(
-                    array([3,2])
-                ),  # [Target1, Target2, Target3]/ [uav1, uav2] 1 if uav i is surveilling target j else 0
                 "previous_action": MultiDiscrete(
                     array([4,4])
                 )
@@ -134,9 +131,7 @@ class Rand_cycle_v2_rel_box(Env):
         self.distance_keeping_result00 = np.load(current_file_path+ os.path.sep + "80_dkc_result_0.0.npz")
         self.time_optimal_result00 = np.load(current_file_path+ os.path.sep + "80_toc_result_0.0.npz")
         
-        self.distance_keeping_straightened_policy00 = self.distance_keeping_result00[
-            "policy"
-        ]
+        self.distance_keeping_straightened_policy00 = self.distance_keeping_result00["policy"]
         self.time_optimal_straightened_policy00 = self.time_optimal_result00["policy"]
 
         self.states = States(
@@ -151,9 +146,7 @@ class Rand_cycle_v2_rel_box(Env):
         )
 
         self.actions = Actions(
-            np.linspace(-1.0 / 4.5, 1.0 / 4.5, self.n_u, dtype=np.float32).reshape(
-                (-1, 1)
-            )
+            np.linspace(-1.0 / 4.5, 1.0 / 4.5, self.n_u, dtype=np.float32).reshape((-1, 1))
         )
 
     def reset(
@@ -239,7 +232,7 @@ class Rand_cycle_v2_rel_box(Env):
         self.surveillance = array(
             [[0, 0],
             [0, 0],
-            [0, 0]],
+            [0, 0]]
         )
         return self.observation, {}
 
@@ -440,8 +433,6 @@ class Rand_cycle_v2_rel_box(Env):
                 text4 = "uav2docked_time: {}".format(self.uav2docked_time)
                 text5 = "uav1 action: {}".format(self.num2str[action[0]])
                 text6 = "uav2 action: {}".format(self.num2str[action[1]])
-                text2 = "surveillance :\n{}".format(self.surveillance)
-
                 text7 = "uav1 battery: {}".format(self.battery[0])
                 text8 = "uav2 battery: {}".format(self.battery[1])
                 text10 = "R_s: {}".format(reward_surveil)
@@ -463,7 +454,6 @@ class Rand_cycle_v2_rel_box(Env):
                 draw.text((0, 80), text4, color=(200, 200, 200), font=self.font)
                 draw.text((0, 100), text5, color=(255, 255, 0), font=self.font)
                 draw.text((0, 120), text6, color=(255, 255, 255), font=self.font)
-                draw.text((0, 140), text2, color=(200, 200, 200), font=self.font)
                 draw.text((770, 0), text7, color=(255, 255, 255), font=self.font)
                 draw.text((770, 20), text8, color=(255, 255, 255), font=self.font)
                 draw.text((770, 60), text10, color=(255, 255, 255), font=self.font)
@@ -713,7 +703,7 @@ class Rand_cycle_v2_rel_box(Env):
     @property
     def observation(self):
         dictionary_obs = {
-            # r, beta
+            # r, cos(alpha)
             "uav1_target1": np.float32(
                 [self.rel_observation(uav=1, target=1)[0],
                 cos(self.rel_observation(uav=1, target=1)[1])]
@@ -738,11 +728,10 @@ class Rand_cycle_v2_rel_box(Env):
                 [self.rel_observation(uav=2, target=3)[0],
                 cos(self.rel_observation(uav=2, target=3)[1])]
                 ),
-            # r, alpha(relative angle)
+            # r, cos(alpha)
             "uav1_charge_station": np.float32([self.observation1[0], cos(self.observation1[1])]),
             "uav2_charge_station": np.float32([self.observation2[0], cos(self.observation2[1])]),
             "battery":  np.float32(self.battery),
-            "surveillance": self.surveillance,
             "previous_action": array(self.previous_action)
         }
         return dictionary_obs
@@ -762,7 +751,7 @@ def L1(x):
 
 if __name__ == "__main__":
     # Number of actions
-    uav_env = gym.make("Rand_cycle_v2_rel_disc")
+    uav_env = gym.make("Rand_cycle_v3_rel_disc")
     action_sample = uav_env.action_space.sample()
     print("action_sample: ", action_sample)
 

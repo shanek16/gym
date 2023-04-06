@@ -322,26 +322,26 @@ register(
 # Custom env
 # ----------------------------------------
 register(
-    id="Rand_cycle_v0_abs_box",
-    entry_point="gym.envs.custom_env.rand_cycle_v0_abs_box:Rand_cycle_v0_abs_box",
+    id="Rand_cycle_abs_box_v0",
+    entry_point="gym.envs.custom_env.rand_cycle_abs_box_v0:Rand_cycle_abs_box_v0",
     max_episode_steps=3600,
 )
 
 register(
-    id="Rand_cycle_v1_abs_box",
-    entry_point="gym.envs.custom_env.rand_cycle_v1_abs_box:Rand_cycle_v1_abs_box",
+    id="Rand_cycle_abs_box_v1",
+    entry_point="gym.envs.custom_env.rand_cycle_abs_box_v1:Rand_cycle_abs_box_v1",
     max_episode_steps=3600,
 )
 
 register(
-    id="Rand_cycle_v2_abs_box",
-    entry_point="gym.envs.custom_env.rand_cycle_v2_abs_box:Rand_cycle_v2_abs_box",
+    id="Rand_cycle_abs_box_v2",
+    entry_point="gym.envs.custom_env.rand_cycle_abs_box_v2:Rand_cycle_abs_box_v2",
     max_episode_steps=3600,
 )
 
 register(
-    id="Rand_cycle_v3_abs_box",
-    entry_point="gym.envs.custom_env.rand_cycle_v3_abs_box:Rand_cycle_v3_abs_box",
+    id="Rand_cycle_abs_box_v3",
+    entry_point="gym.envs.custom_env.rand_cycle_abs_box_v3:Rand_cycle_abs_box_v3",
     max_episode_steps=3600,
 )
 
@@ -353,8 +353,8 @@ register(
 
 # relative position
 register(
-    id="Rand_cycle_v0_rel_box",
-    entry_point="gym.envs.custom_env.rand_cycle_v0_rel_box:Rand_cycle_v0_rel_box",
+    id="Rand_cycle_rel_box_v0",
+    entry_point="gym.envs.custom_env.rand_cycle_rel_box_v0:Rand_cycle_rel_box_v0",
     max_episode_steps=3600,
 )
 
@@ -365,19 +365,19 @@ register(
 )
 
 register(
-    id="Rand_cycle_v1_rel_box_2target",
-    entry_point="gym.envs.custom_env.rand_cycle_v1_rel_box_2target:Rand_cycle_v1_rel_box_2target",
+    id="Rand_cycle_rel_box_v1_2target",
+    entry_point="gym.envs.custom_env.rand_cycle_rel_box_v1_2target:Rand_cycle_rel_box_v1_2target",
     max_episode_steps=6000,
 )
 
 register(
-    id="Rand_cycle_v2_rel_box",
-    entry_point="gym.envs.custom_env.rand_cycle_v2_rel_box:Rand_cycle_v2_rel_box",
+    id="Rand_cycle_rel_box_v2",
+    entry_point="gym.envs.custom_env.rand_cycle_rel_box_v2:Rand_cycle_rel_box_v2",
     max_episode_steps=3600,
 )
 
 register(
-    id="Rand_cycle_v3_rel_box",
-    entry_point="gym.envs.custom_env.rand_cycle_v3_rel_box:Rand_cycle_v3_rel_box",
+    id="Rand_cycle_rel_box_v3",
+    entry_point="gym.envs.custom_env.rand_cycle_rel_box_v3:Rand_cycle_rel_box_v3",
     max_episode_steps=3600,
 )
