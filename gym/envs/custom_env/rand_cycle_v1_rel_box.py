@@ -30,7 +30,7 @@ class Rand_cycle_v1_rel_box(Env):
         r_c=3,
         d_min=4.5,
         max_step=6000,
-        seed = 1 # one circle 1200 time steps
+        seed = None # one circle 1200 time steps
     ):  # m: # of target n: # of uavs
         self.seed = seed
         self.observation_space = Dict(
