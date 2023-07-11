@@ -381,3 +381,9 @@ register(
     entry_point="gym.envs.custom_env.rand_cycle_rel_box_v3:Rand_cycle_rel_box_v3",
     max_episode_steps=3600,
 )
+
+register(
+    id="UAV1Target1",
+    entry_point="gym.envs.custom_env.uav1target1:UAV1Target1",
+    max_episode_steps=6000,
+)
