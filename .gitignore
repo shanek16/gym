@@ -5,6 +5,10 @@
 .cache
 .pytest_cache/
 
+#pics
+*.bmp
+*.jpg
+
 # Setuptools distribution and build folders.
 /dist/
 /build
