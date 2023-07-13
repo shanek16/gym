@@ -1,13 +1,16 @@
 import os
 import sys
+# current_file_path = os.path.dirname(os.path.abspath(__file__))
+# sys.path.append(current_file_path)
+desired_path = os.path.expanduser("~/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/gym")
+sys.path.append(desired_path)
+# print(sys.path)
 import numpy as np
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
 import rendering
 
-current_file_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_file_path)
 
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
@@ -68,7 +71,7 @@ class UAV1Target1(Env):
         self.uav1_state = None
         self.target1_state = None
         self.battery = array([3000])  # 3rounds*1200steps/round
-        self.age = array([0])
+        self.age = 0
         self.charge_station_occupancy = None
         self.surveillance = None
         # for debugging
@@ -81,7 +84,7 @@ class UAV1Target1(Env):
 
         self.max_step = max_step
         self.viewer = None
-        self.SAVE_FRAMES_PATH = "../../visualized/1uav1target" # example. save frames path is set at surveillance_PPO.py
+        self.SAVE_FRAMES_PATH = "~/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/visualized/1uav1target" # example. save frames path is set at surveillance_PPO.py
         self.episode_counter = 0
         self.frame_counter = 0
         self.save_frames = True
@@ -128,7 +131,7 @@ class UAV1Target1(Env):
         self.episode_counter += 1
         self.step_count = 0
         if self.save_frames:
-            print('save_frames_path: ', self.SAVE_FRAMES_PATH)
+            # print('save_frames_path: ', self.SAVE_FRAMES_PATH)
             os.makedirs(
                 os.path.join(self.SAVE_FRAMES_PATH, f"{self.episode_counter:03d}"),
                 exist_ok=True,
@@ -157,7 +160,7 @@ class UAV1Target1(Env):
             self.target1_state = target1_pose
 
         self.battery = array([3000])
-        self.age = array([0])
+        self.age = 0
         self.uav1_in_charge_station = 0
         self.uav2_in_charge_station = 0
         self.uav1docked_time = 0
@@ -202,37 +205,39 @@ class UAV1Target1(Env):
         # action clipping is done in dp already
         # uav1
         battery1 = self.battery[0]
-        if action == 0:  # go to charge uav1
-            if (
-                self.observation1[0] < self.r_c and self.uav2_in_charge_station == False
-            ):  # uav1_in_charge_station
-                # uav1 no move
-                self.uav1_in_charge_station = 1
-                if self.uav1docked_time == 0:  # landing
-                    self.uav1docked_time += 1
-                    # battery stays the same(docking time)
-                else:  # uav1docked_time > 0
-                    battery1 = min(battery1 + 10, 3000)
-                    self.uav1docked_time += 1
-            else:  # not able to land on charge station(too far/uav2 is in)
+        self.surveillance = 0
+        if battery1 <= 0: # UAV dead
+            self.uav1_in_charge_station = 0
+        else: # UAV alive: can take action
+            if action == 0:  # go to charge uav1
+                if (
+                    self.observation1[0] < self.r_c and self.uav2_in_charge_station == False
+                ):  # uav1_in_charge_station
+                    # uav1 no move
+                    self.uav1_in_charge_station = 1
+                    if self.uav1docked_time == 0:  # landing
+                        self.uav1docked_time += 1
+                        # battery stays the same(docking time)
+                    else:  # uav1docked_time > 0
+                        battery1 = min(battery1 + 10, 3000)
+                        self.uav1docked_time += 1
+                else:  # not able to land on charge station(too far/uav2 is in)
+                    self.uav1_in_charge_station = 0
+                    self.uav1docked_time = 0
+                    battery1 -= 1
+                    w1_action = self.toc_get_action(self.observation1[:2])
+                    self.uav1kinematics(w1_action)
+            else:  # surveil target1
                 self.uav1_in_charge_station = 0
                 self.uav1docked_time = 0
                 battery1 -= 1
-                w1_action = self.toc_get_action(self.observation1[:2])
+                w1_action = self.dkc_get_action(self.rel_observation(uav=1, target=1)[:2])
                 self.uav1kinematics(w1_action)
-        else:  # surveil target1
-            self.uav1_in_charge_station = 0
-            self.uav1docked_time = 0
-            battery1 -= 1
-            w1_action = self.dkc_get_action(self.rel_observation(uav=1, target=1)[:2])
-            self.uav1kinematics(w1_action)
+            self.cal_surveillance(action)
+            self.battery = array([battery1])
 
         self.charge_station_occupancy = self.uav1_in_charge_station
-        self.surveillance = 0
-        self.cal_surveillance(action)
         self.cal_age()
-        self.battery = array([battery1])
-
         reward = -self.age
 
         if self.save_frames:
@@ -319,11 +324,14 @@ class UAV1Target1(Env):
             charge_station.set_color(0.9, 0.1, 0.1)  # red
 
         # uav1 (yellow)
-        uav1_x, uav1_y, uav1_theta = self.uav1_state
-        uav1_tf = rendering.Transform(translation=(uav1_x, uav1_y), rotation=uav1_theta)
-        uav1_tri = self.viewer.draw_polygon([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)])
-        uav1_tri.set_color(1, 1, 0)  # yellow
-        uav1_tri.add_attr(uav1_tf)
+        if self.battery[0] <= 0: # UAV dead
+            pass
+        else:
+            uav1_x, uav1_y, uav1_theta = self.uav1_state
+            uav1_tf = rendering.Transform(translation=(uav1_x, uav1_y), rotation=uav1_theta)
+            uav1_tri = self.viewer.draw_polygon([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)])
+            uav1_tri.set_color(1, 1, 0)  # yellow
+            uav1_tri.add_attr(uav1_tf)
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
 
     # relative position
@@ -383,6 +391,7 @@ class UAV1Target1(Env):
                 ),
             "uav1_charge_station": np.float32([self.observation1[0], cos(self.observation1[1])]),
             "battery":  np.float32(self.battery),
+            "age": self.age,
         }
         return dictionary_obs
 
@@ -420,15 +429,16 @@ if __name__ == "__main__":
     while step < 5000:
         step += 1
         # action_sample = uav_env.action_space.sample()
-        if step < 1000:
-            action_sample = 0
-        elif step < 2000:
-            action_sample = 1
-        elif step < 3000:
-            action_sample = 0
-        elif step < 4000:
-            action_sample = 1
-        else:
-            action_sample = 0
+        # if step < 1000:
+        #     action_sample = 0
+        # elif step < 2000:
+        #     action_sample = 1
+        # elif step < 3000:
+        #     action_sample = 0
+        # elif step < 4000:
+        #     action_sample = 1
+        # else:
+        #     action_sample = 0
+        action_sample = 1
         uav_env.step(action_sample)
         uav_env.render(action_sample)

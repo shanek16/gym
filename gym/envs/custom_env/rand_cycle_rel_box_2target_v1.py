@@ -446,16 +446,16 @@ class Rand_cycle_rel_box_2target_v1(Env):
             radius=2, x=target1_x, y=target1_y, filled=True
         )
         if np.shape(action)[0] == 1: #array([[0,1]]) -> shape: (1,2)
-            if action[0][0] is 1:
+            if action[0][0] == 1:
                 target1.set_color(1, 1, 0)  # yellow
-            elif action[0][1] is 1:
+            elif action[0][1] == 1:
                 target1.set_color(0.9, 0.9, 0.9)  # white
             else:
                 target1.set_color(1, 0.6, 0)  # orange
         else: # array([0, 1]) -> shape: (2)
-            if action[0] is 1:
+            if action[0] == 1:
                 target1.set_color(1, 1, 0)  # yellow
-            elif action[1] is 1:
+            elif action[1] == 1:
                 target1.set_color(0.9, 0.9, 0.9)  # white
             else:
                 target1.set_color(1, 0.6, 0)  # orange
@@ -484,16 +484,16 @@ class Rand_cycle_rel_box_2target_v1(Env):
             radius=2, x=target2_x, y=target2_y, filled=True
         )
         if np.shape(action)[0] == 1: #array([[0,1]]) -> shape: (1,2)
-            if action[0][0] is 2:
+            if action[0][0] == 2:
                 target1.set_color(1, 1, 0)  # yellow
-            elif action[0][1] is 2:
+            elif action[0][1] == 2:
                 target1.set_color(0.9, 0.9, 0.9)  # white
             else:
                 target1.set_color(1, 0.6, 0)  # orange
         else: # array([0, 1]) -> shape: (2)
-            if action[0] is 2:
+            if action[0] == 2:
                 target1.set_color(1, 1, 0)  # yellow
-            elif action[1] is 2:
+            elif action[1] == 2:
                 target1.set_color(0.9, 0.9, 0.9)  # white
             else:
                 target1.set_color(1, 0.6, 0)  # orange
