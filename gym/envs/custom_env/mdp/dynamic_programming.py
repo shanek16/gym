@@ -13,19 +13,17 @@ __all__ = ["ValueIteration", "PolicyIteration"]
 class ValueIteration:
     def __init__(self, mdp):
         self.mdp = mdp
-        self.values = np.max(self.mdp.rewards.toarray(), axis=1)
+        self.values = np.max(self.mdp.rewards.toarray(), axis=1) # check size of mdp.rewards
 
     def solve(
         self,
-        sigma,
-        n_r,
-        n_alpha,
         max_iteration=1e3,
         tolerance=1e-8,
         earlystop=100,
         verbose=True,
         callback=None,
         parallel=True,
+        save_name=None,
     ):
 
         self.verbose = Verbose(verbose)
@@ -97,33 +95,35 @@ class ValueIteration:
                 if value_diff <= min_val_diff:
                     best_iter = iter
                     # save the best result
-                    result_filename = "result_" + str(sigma)[:3]
+                    result_filename = save_name + "val_iter" #"UAV1Target1_value_iter_result"
                     self.save(result_filename)
 
-                    value_filename = "value_" + str(sigma)[:3] + ".png"
-                    value_plot = self.values.reshape((n_r, n_alpha))
-                    value_tips = np.flipud(
-                        value_plot.T
-                    )  # value plot of Tips paper format
-                    plt.imsave(value_filename, value_tips, cmap="gray")
+                    # value_filename = "UAV1Target1_value_iter_value" + ".png"
+                    # value_plot = self.values.reshape((n_r, n_alpha))
+                    # value_tips = np.flipud(
+                    #     value_plot.T
+                    # )  # value plot of Tips paper format
+                    # plt.imsave(value_filename, value_tips, cmap="gray")
+                    # self.save(value_filename)
 
-                    policy_filename = "policy_" + str(sigma)[:3] + ".png"
-                    policy_plot = self.mdp.policy.toarray().reshape((n_r, n_alpha))
-                    policy_tips = np.flipud(
-                        policy_plot.T
-                    )  # policy plot of Tips paper format
-                    plt.imsave(
-                        policy_filename,
-                        policy_tips,
-                        cmap="gray",
-                    )
-                    self.verbose("possible best model saved...")
+                    # policy_filename = "UAV1Target1_value_iter_policy" + ".png"
+                    # policy_plot = self.mdp.policy.toarray().reshape((n_r, n_alpha))
+                    # policy_tips = np.flipud(
+                    #     policy_plot.T
+                    # )  # policy plot of Tips paper format
+                    # plt.imsave(
+                    #     policy_filename,
+                    #     policy_tips,
+                    #     cmap="gray",
+                    # )
+                    # self.save(policy_filename)
+                    self.verbose(f"possible best value, policy saved as {result_filename}...")
 
                 delta = iter - best_iter
                 if delta >= earlystop:
                     self.verbose(
                         f"Stopping training early as no improvement observed in last {earlystop} epochs. "
-                        f"Best results observed at iter {best_iter+1}, best model saved as result_xx.npz.\n"
+                        f"Best results observed at iter {best_iter+1}, best model saved as {result_filename}.npz.\n"
                     )
                     break
 
@@ -187,7 +187,6 @@ class ValueIteration:
     def save(self, filename):
         np.savez(filename, values=self.values, policy=self.mdp.policy.toarray())
 
-
 class PolicyIteration:
     def __init__(self, mdp):
         self.mdp = mdp
@@ -205,7 +204,6 @@ class PolicyIteration:
 
     def solve(
         self,
-        sigma,
         n_r,
         n_alpha,
         max_iteration=1e3,
@@ -230,20 +228,20 @@ class PolicyIteration:
             if value_diff <= min_val_diff:
                 best_iter = iter
                 # save the best result
-                result_filename = "result_" + str(sigma)[:3]
+                result_filename = "UAV1Target1_policy_iter_result"
                 self.save(result_filename)
 
-                value_filename = "value_" + str(sigma)[:3] + ".png"
+                value_filename = "UAV1Target1_policy_iter_value" + ".png"
                 value_plot = self.values.reshape((n_r, n_alpha))
                 value_tips = np.flipud(value_plot.T)  # value plot of Tips paper format
                 plt.imsave(value_filename, value_tips, cmap="gray")
 
-                policy_filename = "policy_" + str(sigma)[:3] + ".png"
+                policy_filename = "UAV1Target1_policy_iter_policy" + ".png"
                 policy_plot = self.mdp.policy.toarray().reshape((n_r, n_alpha))
                 policy_tips = np.flipud(
                     policy_plot.T
                 )  # policy plot of Tips paper format
-                plt.imsave(
+                plt.imsave(  # saved policy plot image is same data as result.npz file
                     policy_filename,
                     policy_tips,
                     cmap="gray",
@@ -348,9 +346,7 @@ class PolicyIteration:
                 ).reshape(self.mdp.rewards.shape)
                 self.verbose("Updating policy...")
                 policy = np.argmax(q, axis=1).astype(self.mdp.policy.dtype)
-                new_values = np.take_along_axis(
-                    q, policy[:, np.newaxis], axis=1
-                ).ravel()
+                new_values = np.take_along_axis(q, policy[:, np.newaxis], axis=1).ravel()
                 self.mdp.policy.update(policy)
 
             value_diff = self.values[:] - new_values[:]

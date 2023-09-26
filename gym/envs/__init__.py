@@ -387,3 +387,15 @@ register(
     entry_point="gym.envs.custom_env.uav1target1:UAV1Target1",
     max_episode_steps=6000,
 )
+
+register(
+    id="DKC_Unicycle",
+    entry_point="gym.envs.custom_env.dkc_unicycle:DKC_Unicycle",
+    max_episode_steps=2000,
+)
+
+register(
+    id="TOC_Unicycle",
+    entry_point="gym.envs.custom_env.toc_unicycle:TOC_Unicycle",
+    max_episode_steps=2000,
+)

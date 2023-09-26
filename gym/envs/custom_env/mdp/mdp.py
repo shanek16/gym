@@ -4,20 +4,23 @@ from time import time
 import numpy as np
 from scipy import sparse as sp
 from utils import ArrEq, Verbose, savez
+import traceback
 
 __all__ = [
     "States",
     "Actions",
+    "Surveillance_Actions",
     "Rewards",
     "Policy",
     "StateTransitionProbability",
     "MarkovDecisionProcess",
+    "MarkovDecisionProcessTerminalCondition",
 ]
 
 
 class States:
     def __init__(
-        self, *state_lists, cycles=None, terminal_states=None, dtype=np.float32
+        self, *state_lists, cycles=None, terminal_states=None, dtype=np.float64
     ):
         self.__data = None
         self.__cycles = None
@@ -26,11 +29,10 @@ class States:
             *state_lists, cycles=cycles, terminal_states=terminal_states, dtype=dtype
         )
 
-    def update(self, *state_lists, cycles=None, terminal_states=None, dtype=np.float32):
+    def update(self, *state_lists, cycles=None, terminal_states=None, dtype=np.float64):
 
         self.__data = [np.array(state_list, dtype=dtype) for state_list in state_lists]
-        # print("printing state__data:")
-        # print(self.__data)
+
         if cycles is None:
             self.__cycles = [np.inf] * len(state_lists)
         elif len(cycles) == len(state_lists):
@@ -123,9 +125,18 @@ class States:
         return np.prod(self.shape)
 
     def computeBarycentric(self, item):
+        # concatenate dict into numpy array
+        # print('item: ', item)
+        # print('type of item:', type(item))
+        if isinstance(item, dict):
+            # Select specific values from the dictionary
+            selected_values = [item['uav1_target1'][0], item['uav1_target1'][1],
+                            item['uav1_charge_station'][0], item['uav1_charge_station'][1],
+                            item['battery'][0], item['age']]
 
-        if not isinstance(item, np.ndarray):
-            item = np.array(item, dtype=self.dtype)
+            # Convert the selected values to numpy array
+            item = np.array(selected_values)
+            # print('concatenated item: ',item)
         i = []
         p = []
         for (state_list, cycle, x) in zip(self.__data, self.__cycles, item):
@@ -199,7 +210,7 @@ class States:
 
 
 class Actions:
-    def __init__(self, action_list, dtype=np.float32):
+    def __init__(self, action_list, dtype=np.float64):
 
         self.__data = None
         self.__data_ndarr = None
@@ -231,7 +242,7 @@ class Actions:
     def num_actions(self):
         return len(self.__data)
 
-    def update(self, action_list, dtype=np.float32):
+    def update(self, action_list, dtype=np.float64):
         self.__data = list()
         self.__data_ndarr = list()
         for item in action_list:
@@ -247,14 +258,63 @@ class Actions:
     # End of class Actions
 
 
-class Rewards:
-    def __init__(self, states, actions, dtype=np.float32, sparse=False):
+class Surveillance_Actions:
+    def __init__(self, action_lists, dtype=np.float64):
 
+        self.__data = None
+        self.__data_ndarr = None
+        self.update(action_lists, dtype)
+
+    def index(self, item):
+
+        if isinstance(item, np.ndarray):
+            return self.__data_ndarr.index(item)
+        else:
+            return self.__data.index(item)
+
+    def __getitem__(self, key):
+
+        return self.__data[key]
+
+    def __iter__(self):
+        return self.__data.__iter__()
+
+    @property
+    def dtype(self):
+        return self.__data[0].dtype
+
+    @property
+    def shape(self):
+        return (len(self.__data),) + self.__data[0].shape
+
+    @property
+    def num_actions(self):
+        return len(self.__data)
+
+    def update(self, action_lists, dtype=np.float64):
+        self.__data = list()
+        self.__data_ndarr = list()
+        for item in action_lists:
+            self.__data.append(np.array(item))
+            self.__data_ndarr.append(ArrEq(self.__data[-1]))
+
+    def tolist(self):
+        return self.__data
+
+    def toarray(self):
+        return np.array(self.__data)
+
+    # End of class Actions
+
+
+class Rewards:
+    def __init__(self, states, actions, dtype=np.float64, sparse=False):
         shape = (states.num_states, actions.num_actions)
         if sparse:
             self.__data = sp.dok_matrix(shape, dtype=dtype)
         else:
             self.__data = np.zeros(shape, dtype=dtype)
+        print('sp matrix of Rewards made...')
 
     def __setitem__(self, key, val):
 
@@ -328,11 +388,15 @@ class Rewards:
 
 
 class StateTransitionProbability:
-    def __init__(self, states, actions, dtype=np.float32):
-
+    def __init__(self, states, actions, dtype=np.float64):
+        print(
+            "states.num_states * actions.num_actions: ",
+            states.num_states * actions.num_actions,
+        )
         self.__data = sp.dok_matrix(
             (states.num_states * actions.num_actions, states.num_states), dtype=dtype
         )
+        print('sp matrix of P made..')
 
     def __setitem__(self, key, val):
 
@@ -501,7 +565,7 @@ class Policy:
 
     # End of class Policy
 
-
+# MDP without terminal states
 class MarkovDecisionProcess:
     def __init__(
         self,
@@ -533,11 +597,10 @@ class MarkovDecisionProcess:
         self.__sample_reward = False
 
     def _worker(self, queue, state):
-        if not ArrEq(state) in self.states.terminal_states:
-            if self.__sample_reward:
-                spmat, arr = self.__sampler(state)
-            else:
-                spmat = self.__sampler(state)
+        if self.__sample_reward:
+            spmat, arr = self.__sampler(state)
+        else:
+            spmat = self.__sampler(state)
         queue.put(1)
         if self.__sample_reward:
             return np.array([spmat.tocsr(), arr], dtype=object)
@@ -545,7 +608,6 @@ class MarkovDecisionProcess:
             return spmat.tocsr()
 
     def sample(self, sampler, sample_reward=False, verbose=True):
-
         verbose = Verbose(verbose)
         verbose("Start sampling...")
         start_time = time()
@@ -666,6 +728,174 @@ class MarkovDecisionProcess:
 
     # End of class MarkovDecisionProcess
 
+# MDP with terminal states
+class MarkovDecisionProcessTerminalCondition:
+    def __init__(
+        self,
+        states=None,
+        actions=None,
+        rewards=None,
+        state_transition_probability=None,
+        policy=None,
+        discount=0,
+    ):
+
+        self.states = States([]) if states is None else states
+        self.actions = Actions([]) if actions is None else actions
+        self.rewards = (
+            Rewards(self.states, self.actions) if rewards is None else rewards
+        )
+        self.discount = min(
+            np.array(discount, dtype=self.rewards.dtype).item(),
+            np.array(1, dtype=self.rewards.dtype).item()
+            - np.finfo(self.rewards.dtype).eps,
+        )
+        self.state_transition_probability = (
+            StateTransitionProbability(self.states, self.actions)
+            if state_transition_probability is None
+            else state_transition_probability
+        )
+        self.policy = Policy(self.states, self.actions) if policy is None else policy
+        self.__sampler = None
+        self.__sample_reward = False
+
+    def _worker(self, queue, state):
+        # if not ArrEq(state) in self.states.terminal_states:
+        # if tuple(state) not in self.terminal_states:
+        r, _ = state
+        if r > 1: # if not terminal state:
+            if self.__sample_reward:
+                spmat, arr = self.__sampler(state)
+            else:
+                spmat = self.__sampler(state)
+        else: # if state is in terminal states
+            spmat = sp.dok_matrix((self.actions.num_actions, self.states.num_states), dtype=np.float64)
+            state_indice, _ = self.states.computeBarycentric(state)
+            spmat[:, state_indice] += 1
+        queue.put(1)
+        if self.__sample_reward:
+            return np.array([spmat.tocsr(), arr], dtype=object)
+        else:
+            return spmat.tocsr()
+
+    def sample(self, sampler, sample_reward=False, verbose=True):
+        verbose = Verbose(verbose)
+        verbose("Start sampling...")
+        start_time = time()
+        self.__sampler = sampler
+        self.__sample_reward = sample_reward
+        queue = Manager().Queue()
+        with Pool(cpu_count()) as p:
+            data = p.starmap_async(
+                self._worker, [(queue, state) for state in self.states]
+            )
+            counter = 0
+            tic = time()
+            while counter < self.states.num_states:
+                counter += queue.get()
+                if time() - tic > 0.1:
+                    progress = counter / self.states.num_states
+                    rt = (time() - start_time) * (1 - progress) / progress
+                    rh = rt // 3600
+                    rt %= 3600
+                    rm = rt // 60
+                    rs = rt % 60
+                    progress *= 100
+                    verbose(
+                        "Sampling progress: %5.1f %%... (%dh %dm %ds rem.)"
+                        % (progress, rh, rm, rs)
+                    )
+                    tic = time()
+            if self.__sample_reward:
+                data = np.array(data.get(), dtype=object)
+                self.state_transition_probability.update(sp.vstack(data[:, 0]))
+                self.rewards.update(
+                    np.array(data[:, 1].tolist(), dtype=self.rewards.dtype)
+                )
+            else:
+                self.state_transition_probability.update(sp.vstack(data.get()))
+        self.__sampler = None
+        end_time = time()
+        verbose("Sampling is done. %f (sec) elapsed.\n" % (end_time - start_time))
+
+    def load(self, filename):
+
+        data = np.load(filename, allow_pickle=False)
+        state_lists = []
+        for idx in range(data["states.num_lists"].item()):
+            state_lists.append(data["states.data." + str(idx)])
+        self.states = States(
+            *state_lists,
+            cycles=data["states.cycles"],
+            terminal_states=data["states.terminal_states"]
+        )
+
+        self.actions = Actions(data["actions.data"])
+
+        self.rewards = Rewards(
+            self.states, self.actions, sparse=data["rewards.issparse"].item()
+        )
+        if self.rewards.issparse:
+            self.rewards.update(
+                sp.csr_matrix(
+                    (
+                        data["rewards.data"],
+                        data["rewards.indices"],
+                        data["rewards.indptr"],
+                    ),
+                    shape=(self.states.num_states, self.actions.num_actions),
+                )
+            )
+        else:
+            self.rewards.update(data["rewards.data"])
+
+        self.state_transition_probability = StateTransitionProbability(
+            self.states, self.actions
+        )
+        self.state_transition_probability.update(
+            sp.csr_matrix(
+                (
+                    data["state_transition_probability.data"],
+                    data["state_transition_probability.indices"],
+                    data["state_transition_probability.indptr"],
+                ),
+                shape=(
+                    self.states.num_states * self.actions.num_actions,
+                    self.states.num_states,
+                ),
+            )
+        )
+        self.policy = Policy(self.states, self.actions)
+        self.policy.update(data["policy.data"])
+        self.discount = data["discount"].item()
+
+    def save(self, filename):
+
+        if not sp.isspmatrix_csr(self.state_transition_probability.tospmat()):
+            self.state_transition_probability.tocsr()
+
+        kwargs = {
+            "states.num_lists": len(self.states.shape),
+            "states.cycles": self.states.info(return_cycles=True),
+            "states.terminal_states": self.states.terminal_states,
+            "actions.data": self.actions.toarray(),
+            "rewards.issparse": self.rewards.issparse,
+            "state_transition_probability.data": self.state_transition_probability.tospmat().data,
+            "state_transition_probability.indices": self.state_transition_probability.tospmat().indices,
+            "state_transition_probability.indptr": self.state_transition_probability.tospmat().indptr,
+            "policy.data": self.policy.toarray(),
+            "discount": self.discount,
+        }
+        for idx, state_list in enumerate(self.states.info(return_data=True)):
+            kwargs["states.data." + str(idx)] = state_list
+        if self.rewards.issparse:
+            kwargs["rewards.data"] = (self.rewards.tocsr().data,)
+            kwargs["rewards.indices"] = (self.rewards.tocsr().indices,)
+            kwargs["rewards.indptr"] = (self.rewards.tocsr().indptr,)
+        else:
+            kwargs["rewards.data"] = self.rewards.toarray()
+
+        savez(filename, **kwargs)
 
 if __name__ == "__main__":
 
