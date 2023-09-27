@@ -5,6 +5,7 @@ import numpy as np
 from scipy import sparse as sp
 from utils import ArrEq, Verbose, savez
 import traceback
+import sys
 
 __all__ = [
     "States",
@@ -20,7 +21,7 @@ __all__ = [
 
 class States:
     def __init__(
-        self, *state_lists, cycles=None, terminal_states=None, dtype=np.float64
+        self, *state_lists, cycles=None, terminal_states=None, dtype=np.float32
     ):
         self.__data = None
         self.__cycles = None
@@ -29,7 +30,7 @@ class States:
             *state_lists, cycles=cycles, terminal_states=terminal_states, dtype=dtype
         )
 
-    def update(self, *state_lists, cycles=None, terminal_states=None, dtype=np.float64):
+    def update(self, *state_lists, cycles=None, terminal_states=None, dtype=np.float32):
 
         self.__data = [np.array(state_list, dtype=dtype) for state_list in state_lists]
 
@@ -126,13 +127,11 @@ class States:
 
     def computeBarycentric(self, item):
         # concatenate dict into numpy array
-        # print('item: ', item)
-        # print('type of item:', type(item))
         if isinstance(item, dict):
             # Select specific values from the dictionary
             selected_values = [item['uav1_target1'][0], item['uav1_target1'][1],
                             item['uav1_charge_station'][0], item['uav1_charge_station'][1],
-                            item['battery'][0], item['age']]
+                            item['battery'], item['age'], item['previous_action']]
 
             # Convert the selected values to numpy array
             item = np.array(selected_values)
@@ -210,7 +209,7 @@ class States:
 
 
 class Actions:
-    def __init__(self, action_list, dtype=np.float64):
+    def __init__(self, action_list, dtype=np.float32):
 
         self.__data = None
         self.__data_ndarr = None
@@ -242,7 +241,7 @@ class Actions:
     def num_actions(self):
         return len(self.__data)
 
-    def update(self, action_list, dtype=np.float64):
+    def update(self, action_list, dtype=np.float32):
         self.__data = list()
         self.__data_ndarr = list()
         for item in action_list:
@@ -259,7 +258,7 @@ class Actions:
 
 
 class Surveillance_Actions:
-    def __init__(self, action_lists, dtype=np.float64):
+    def __init__(self, action_lists, dtype=np.float32):
 
         self.__data = None
         self.__data_ndarr = None
@@ -291,7 +290,7 @@ class Surveillance_Actions:
     def num_actions(self):
         return len(self.__data)
 
-    def update(self, action_lists, dtype=np.float64):
+    def update(self, action_lists, dtype=np.float32):
         self.__data = list()
         self.__data_ndarr = list()
         for item in action_lists:
@@ -308,13 +307,13 @@ class Surveillance_Actions:
 
 
 class Rewards:
-    def __init__(self, states, actions, dtype=np.float64, sparse=False):
+    def __init__(self, states, actions, dtype=np.float32, sparse=False):
         shape = (states.num_states, actions.num_actions)
         if sparse:
             self.__data = sp.dok_matrix(shape, dtype=dtype)
+            print('sp matrix of Rewards made...')
         else:
             self.__data = np.zeros(shape, dtype=dtype)
-        print('sp matrix of Rewards made...')
 
     def __setitem__(self, key, val):
 
@@ -327,6 +326,22 @@ class Rewards:
     def __iter__(self):
 
         return self.__data.__iter__()
+    
+    def __eq__(self, other):
+        # Check if both are instances of Rewards class
+        if not isinstance(other, Rewards):
+            return False
+
+        # Check if both are sparse or both are dense
+        if self.issparse != other.issparse:
+            return False
+
+        # If both are sparse, convert to CSR format and compare
+        if self.issparse:
+            return (self.tocsr() != other.tocsr()).nnz == 0
+
+        # If both are dense, simply compare the numpy arrays
+        return np.array_equal(self.toarray(), other.toarray())
 
     @property
     def dtype(self):
@@ -388,7 +403,7 @@ class Rewards:
 
 
 class StateTransitionProbability:
-    def __init__(self, states, actions, dtype=np.float64):
+    def __init__(self, states, actions, dtype=np.float32):
         print(
             "states.num_states * actions.num_actions: ",
             states.num_states * actions.num_actions,
@@ -607,34 +622,55 @@ class MarkovDecisionProcess:
         else:
             return spmat.tocsr()
 
-    def sample(self, sampler, sample_reward=False, verbose=True):
+    def sample(self, sampler, sample_reward=False, verbose=True, parallel=True):
         verbose = Verbose(verbose)
         verbose("Start sampling...")
         start_time = time()
         self.__sampler = sampler
         self.__sample_reward = sample_reward
-        queue = Manager().Queue()
-        with Pool(cpu_count()) as p:
-            data = p.starmap_async(
-                self._worker, [(queue, state) for state in self.states]
-            )
-            counter = 0
-            tic = time()
-            while counter < self.states.num_states:
-                counter += queue.get()
-                if time() - tic > 0.1:
-                    progress = counter / self.states.num_states
-                    rt = (time() - start_time) * (1 - progress) / progress
-                    rh = rt // 3600
-                    rt %= 3600
-                    rm = rt // 60
-                    rs = rt % 60
-                    progress *= 100
-                    verbose(
-                        "Sampling progress: %5.1f %%... (%dh %dm %ds rem.)"
-                        % (progress, rh, rm, rs)
+        if parallel:
+            queue = Manager().Queue()
+            with Pool(cpu_count()) as p:
+                data = p.starmap_async(
+                    self._worker, [(queue, state) for state in self.states]
+                )
+                counter = 0
+                tic = time()
+                while counter < self.states.num_states:
+                    counter += queue.get()
+                    if time() - tic > 0.1:
+                        progress = counter / self.states.num_states
+                        rt = (time() - start_time) * (1 - progress) / progress
+                        rh = rt // 3600
+                        rt %= 3600
+                        rm = rt // 60
+                        rs = rt % 60
+                        progress *= 100
+                        verbose(
+                            "Sampling progress: %5.1f %%... (%dh %dm %ds rem.)"
+                            % (progress, rh, rm, rs)
+                        )
+                        tic = time()
+                if self.__sample_reward:
+                    data = np.array(data.get(), dtype=object)
+                    self.state_transition_probability.update(sp.vstack(data[:, 0]))
+                    self.rewards.update(
+                        np.array(data[:, 1].tolist(), dtype=self.rewards.dtype)
                     )
-                    tic = time()
+                else:
+                    self.state_transition_probability.update(sp.vstack(data.get()))
+        else:
+            # Modified code to run in a single process for debugging
+            data = []
+            for state in self.states:
+                try:
+                    result = self._worker(None, state)  # Replace None with an actual queue if necessary
+                    data.append(result)
+                except Exception as e:
+                    # print(f"An error occurred: {e}")
+                    traceback.print_exc()
+                    sys.exit(1)
+
             if self.__sample_reward:
                 data = np.array(data.get(), dtype=object)
                 self.state_transition_probability.update(sp.vstack(data[:, 0]))
@@ -762,50 +798,76 @@ class MarkovDecisionProcessTerminalCondition:
     def _worker(self, queue, state):
         # if not ArrEq(state) in self.states.terminal_states:
         # if tuple(state) not in self.terminal_states:
-        r, _ = state
-        if r > 1: # if not terminal state:
+        # r, _ = state # toc/dkc
+        _, _, _, _, bat, _, _ = state # 1u1t
+        # if r > 1: # if not terminal state:
+        if bat > 0: # if not terminal state:
             if self.__sample_reward:
                 spmat, arr = self.__sampler(state)
             else:
                 spmat = self.__sampler(state)
         else: # if state is in terminal states
-            spmat = sp.dok_matrix((self.actions.num_actions, self.states.num_states), dtype=np.float64)
+            spmat = sp.dok_matrix((self.actions.num_actions, self.states.num_states), dtype=np.float32)
             state_indice, _ = self.states.computeBarycentric(state)
             spmat[:, state_indice] += 1
-        queue.put(1)
+        if queue is None:
+            pass
+        else:
+            queue.put(1)
         if self.__sample_reward:
             return np.array([spmat.tocsr(), arr], dtype=object)
         else:
             return spmat.tocsr()
 
-    def sample(self, sampler, sample_reward=False, verbose=True):
+    def sample(self, sampler, parallel, sample_reward=False, verbose=True):
         verbose = Verbose(verbose)
         verbose("Start sampling...")
         start_time = time()
         self.__sampler = sampler
         self.__sample_reward = sample_reward
-        queue = Manager().Queue()
-        with Pool(cpu_count()) as p:
-            data = p.starmap_async(
-                self._worker, [(queue, state) for state in self.states]
-            )
-            counter = 0
-            tic = time()
-            while counter < self.states.num_states:
-                counter += queue.get()
-                if time() - tic > 0.1:
-                    progress = counter / self.states.num_states
-                    rt = (time() - start_time) * (1 - progress) / progress
-                    rh = rt // 3600
-                    rt %= 3600
-                    rm = rt // 60
-                    rs = rt % 60
-                    progress *= 100
-                    verbose(
-                        "Sampling progress: %5.1f %%... (%dh %dm %ds rem.)"
-                        % (progress, rh, rm, rs)
+        if parallel:
+            queue = Manager().Queue()
+            with Pool(cpu_count()) as p:
+                data = p.starmap_async(
+                    self._worker, [(queue, state) for state in self.states]
+                )
+                counter = 0
+                tic = time()
+                while counter < self.states.num_states:
+                    counter += queue.get()
+                    if time() - tic > 0.1:
+                        progress = counter / self.states.num_states
+                        rt = (time() - start_time) * (1 - progress) / progress
+                        rh = rt // 3600
+                        rt %= 3600
+                        rm = rt // 60
+                        rs = rt % 60
+                        progress *= 100
+                        verbose(
+                            "Sampling progress: %5.1f %%... (%dh %dm %ds rem.)"
+                            % (progress, rh, rm, rs)
+                        )
+                        tic = time()
+                if self.__sample_reward:
+                    data = np.array(data.get(), dtype=object)
+                    self.state_transition_probability.update(sp.vstack(data[:, 0]))
+                    self.rewards.update(
+                        np.array(data[:, 1].tolist(), dtype=self.rewards.dtype)
                     )
-                    tic = time()
+                else:
+                    self.state_transition_probability.update(sp.vstack(data.get()))
+        else:
+            # Modified code to run in a single process for debugging
+            data = []
+            for state in self.states:
+                try:
+                    result = self._worker(None, state)  # Replace None with an actual queue if necessary
+                    data.append(result)
+                except Exception as e:
+                    print(f"An error occurred: {e}")
+                    traceback.print_exc()
+                    sys.exit(1)
+
             if self.__sample_reward:
                 data = np.array(data.get(), dtype=object)
                 self.state_transition_probability.update(sp.vstack(data[:, 0]))

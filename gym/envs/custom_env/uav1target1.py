@@ -117,6 +117,7 @@ class UAV1Target1(Env):
                 (-1, 1)
             )
         )
+        self.discount = 0.995
 
     def reset(
         self,
@@ -179,6 +180,35 @@ class UAV1Target1(Env):
         # self.uav1docked_time = 0
         
         return self.observation, {}
+
+    def print_q_init(self):
+        # complex version
+        self.target_discretized_r_space = np.append(np.arange(0,20,3), np.arange(20,81,10))
+        self.charge_discretized_r_space = np.concatenate([np.arange(0,10), np.arange(10,51,20)])
+        self.target_alpha_space = np.linspace(-np.pi, np.pi - np.pi / 10, 10, dtype=np.float32)
+        self.charge_alpha_space = np.linspace(-np.pi, np.pi - np.pi / 10, 10, dtype=np.float32)
+        self.battery_space = np.concatenate([np.arange(0, 2000, 100), np.arange(2000, 3100, 500)])
+        self.age_space = np.arange(0, 11, 3) #11
+        self.previous_action_space = np.arange(2) # np.array([0, 1]),
+        self.UAV1Target1_result00 = np.load(f"../../../../RESULTS/v1_1U1T_R_gamma_{self.discount}_val_iter.npz")
+        self.UAV1Target1_straightened_policy00 = self.UAV1Target1_result00["policy"]
+        self.UAV1Target1_values00 = self.UAV1Target1_result00["values"]
+        # print('shape of UAV1Target1_straightened_policy00: ', np.shape(self.UAV1Target1_straightened_policy00))
+        # print('shape of UAV1Target1_values00: ', np.shape(self.UAV1Target1_values00))
+
+        self.uav1target1_states = States(
+            # uav1_target1
+            self.target_discretized_r_space, # [0]
+            self.target_alpha_space,                # [1]
+            # uav1_charge
+            self.charge_discretized_r_space, # [2]
+            self.charge_alpha_space,                # [3]
+            # battery_state
+            self.battery_space,              # [4]
+            self.age_space,                  # [5]
+            self.previous_action_space,
+            cycles=[None, np.pi*2, None, np.pi*2, None, None, None],
+        )
 
     def uav1kinematics(self, action):
         dtheta = action * self.dt
@@ -508,7 +538,31 @@ class UAV1Target1(Env):
             "previous_action": self.previous_action
         }
         return dictionary_obs
+    
+    def print_q_value(self):
+        # dry_step with 1 env
+        # 1) get reward for each action: 0 & 1
+        state0, reward0, _, _, _ = self.dry_step(action=0)
+        state1, reward1, _, _, _ = self.dry_step(action=1)
 
+        # 2) get Value for each action
+        S0, P0 = self.uav1target1_states.computeBarycentric(state0)
+        value0 = 0
+        for s0, p0 in zip(S0, P0):
+            value0 += p0 * self.UAV1Target1_values00[s0]
+
+        S1, P1 = self.uav1target1_states.computeBarycentric(state1)
+        value1 = 0
+        for s1, p1 in zip(S1, P1):
+            value1 += p1 * self.UAV1Target1_values00[s1]
+
+        self.Q0 = reward0+self.discount*value0
+        self.Q1 = reward1+self.discount*value1
+        max_Q = max(self.Q0, self.Q1)
+        min_Q = min(self.Q0, self.Q1)
+        print(f'max_Q: {max_Q:.0f}', end=' | ')
+        print(f'maxQ - Q: {max_Q-min_Q:.0f}', end=' | ')
+        print(f'Q0: {self.Q0:.2f}, Q1: {self.Q1:.2f}')
 
 def wrap(theta):
     if theta > pi:
@@ -543,6 +597,7 @@ if __name__ == "__main__":
     
     repitition = 10
     avg_reward = 0
+    uav_env.print_q_init()
     for i in range(repitition):
         step = 0
         truncated = False
@@ -564,10 +619,10 @@ if __name__ == "__main__":
             obs, reward, _, truncated, _ = uav_env.step(action)
             total_reward += reward
             bat = obs['battery']
-            # print(f'battery: {bat} | reward: {reward}')
-            # uav_env.render(action)
+            print(f'step: {step} | battery: {bat} | reward: {reward}', end=' |')
+            uav_env.print_q_value()
+            uav_env.render(action)
         print(f'{i}: {total_reward}')   
-        # input()
         avg_reward += total_reward
     avg_reward /= repitition
     print(f'average reward: {avg_reward}') 
