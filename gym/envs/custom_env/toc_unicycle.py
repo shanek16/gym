@@ -18,7 +18,7 @@ class TOC_Unicycle(Env):
 
     def __init__(
         self,
-        r_max=80.0,
+        r_max=40.0,
         r_min=1.0,
         sigma=0.0,
         dt=0.05,
@@ -54,8 +54,9 @@ class TOC_Unicycle(Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def reset(self, pose=None):
+    def reset(self, pose=None, seed=None):
         self.step_count = 0
+        np.random.seed(seed)
         if pose is None:
             r = self.np_random.uniform(
                 self.observation_space.low[0],

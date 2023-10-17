@@ -18,12 +18,12 @@ class DKC_Unicycle(Env):
 
     def __init__(
         self,
-        r_max=80,
+        r_max=40,
         r_min=0.0,
         sigma=0.0,
         dt=0.05,
         v=1.0,
-        d=10.0,
+        d=5.0,
         d_min=4.5,
         k1=0.0181,
         max_step=2000, # is max_step=2000 sufficient for the uav(r=75) to reach the target? -> Yes it is. it takes less than 1800 steps.

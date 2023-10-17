@@ -126,12 +126,12 @@ class States:
         return np.prod(self.shape)
 
     def computeBarycentric(self, item):
-        # concatenate dict into numpy array
+        # concatenate dict into numpy array # need for dry_step
         if isinstance(item, dict):
             # Select specific values from the dictionary
             selected_values = [item['uav1_target1'][0], item['uav1_target1'][1],
                             item['uav1_charge_station'][0], item['uav1_charge_station'][1],
-                            item['battery'], item['age'], item['previous_action']]
+                            item['battery'], item['age']]
 
             # Convert the selected values to numpy array
             item = np.array(selected_values)
@@ -482,6 +482,17 @@ class StateTransitionProbability:
     def __iter__(self):
         return self.__data.__iter__()
 
+    def __eq__(self, other):
+        # Check if the other object is an instance of StateTransitionProbability
+        if not isinstance(other, StateTransitionProbability):
+            return NotImplemented
+
+        # Compare the __data attributes of both instances
+        # The expression (self.__data != other.__data) returns a matrix of boolean values indicating element-wise inequality.
+        # The .nnz property returns the number of non-zero entries in the matrix.
+        # If there are no non-zero entries, it means all elements are equal, and hence the matrices are equal.
+        return (self.__data != other.__data).nnz == 0
+
     @property
     def dtype(self):
         return self.__data.dtype
@@ -796,11 +807,11 @@ class MarkovDecisionProcessTerminalCondition:
         self.__sample_reward = False
 
     def _worker(self, queue, state):
-        # if not ArrEq(state) in self.states.terminal_states:
-        # if tuple(state) not in self.terminal_states:
-        # r, _ = state # toc/dkc
-        _, _, _, _, bat, _, _ = state # 1u1t
+        # toc/dkc
+        # r, _ = state
         # if r > 1: # if not terminal state:
+        # 1u1t
+        _, _, _, _, bat, _, _ = state
         if bat > 0: # if not terminal state:
             if self.__sample_reward:
                 spmat, arr = self.__sampler(state)
@@ -869,7 +880,7 @@ class MarkovDecisionProcessTerminalCondition:
                     sys.exit(1)
 
             if self.__sample_reward:
-                data = np.array(data.get(), dtype=object)
+                data = np.array(data, dtype=object)
                 self.state_transition_probability.update(sp.vstack(data[:, 0]))
                 self.rewards.update(
                     np.array(data[:, 1].tolist(), dtype=self.rewards.dtype)
