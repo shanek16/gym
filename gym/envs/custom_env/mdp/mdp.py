@@ -126,7 +126,7 @@ class States:
         return np.prod(self.shape)
 
     def computeBarycentric(self, item):
-        # concatenate dict into numpy array # need for dry_step
+        # concatenate dict into numpy array
         if isinstance(item, dict):
             # Select specific values from the dictionary
             selected_values = [item['uav1_target1'][0], item['uav1_target1'][1],
@@ -136,37 +136,59 @@ class States:
             # Convert the selected values to numpy array
             item = np.array(selected_values)
             # print('concatenated item: ',item)
+            n_alpha = 10
+        else:
+            n_alpha = 360
         i = []
         p = []
         for (state_list, cycle, x) in zip(self.__data, self.__cycles, item):
-            idx = np.searchsorted(state_list, x)
-            if idx < len(state_list):
-                if x == state_list[idx]:
-                    i.append(np.array([idx], dtype=int))
-                    p.append(np.ones((1,), dtype=self.dtype))
-                else:
-                    d1 = state_list[idx] - x
-                    if idx == 0:
-                        if cycle is np.inf:
-                            i.append(np.array([idx], dtype=int))
-                            p.append(np.ones((1,), dtype=self.dtype))
-                        else:
-                            d2 = x - state_list[-1] + cycle
-                            i.append(np.array([idx, len(state_list) - 1]))
-                            p.append(np.array([d1, d2]) / (d1 + d2))
+            in_range = False
+            # loop = 0
+            while not in_range:
+                # loop += 1
+                # if loop > 10:
+                #     print('looping over 10 times..')
+                idx = np.searchsorted(state_list, x)
+                if idx < len(state_list): # x < max(state_list)
+                    if x == state_list[idx]:
+                    # if x - state_list[idx] < 1e-7: # -pi -> pi -> -pi...
+                        i.append(np.array([idx], dtype=int))
+                        p.append(np.ones((1,), dtype=self.dtype))
+                        in_range = True
                     else:
-                        d2 = x - state_list[idx - 1]
-                        i.append(np.array([idx - 1, idx], dtype=int))
-                        p.append(np.array([d1, d2]) / (d1 + d2))
-            else:
-                if cycle is np.inf:
-                    i.append(np.array([idx - 1], dtype=int))
-                    p.append(np.ones((1,), dtype=self.dtype))
-                else:
-                    d1 = x - state_list[-1]
-                    d2 = state_list[0] - x + state_list[0]
-                    i.append(np.array([0, idx - 1]))
-                    p.append(np.array([d1, d2]) / (d1 + d2))
+                        d1 = state_list[idx] - x
+                        if idx == 0: # x < min(state_list)
+                            if cycle == np.inf: # was is
+                                i.append(np.array([idx], dtype=int))
+                                p.append(np.ones((1,), dtype=self.dtype))
+                                in_range = True
+                            else:
+                                if d1 < np.pi/n_alpha: # for accuray(avoid extrapolating when interpolating is available for 2 nearer points) # 10 for 1uav1target
+                                    d2 = x + cycle - state_list[-1] #seems to need fix
+                                    i.append(np.array([idx -1, 0]))
+                                    p.append(np.array([d1, d2]) / (d1 + d2))
+                                    in_range = True
+                                else:
+                                    x += cycle
+                        else: # min(sate_list) < x < max(state_list)
+                            d2 = x - state_list[idx - 1]
+                            i.append(np.array([idx - 1, idx], dtype=int))
+                            p.append(np.array([d1, d2]) / (d1 + d2))
+                            in_range = True
+                else: # x > max(state_list)
+                    if cycle == np.inf:
+                        i.append(np.array([idx - 1], dtype=int))
+                        p.append(np.ones((1,), dtype=self.dtype))
+                        in_range = True
+                    else: # need fix
+                        d2 = x - state_list[-1]
+                        if d2 < np.pi/n_alpha: # for accuray(avoid extrapolating when interpolating is available for 2 nearer points) # 10 for 1uav1target
+                            d1 = state_list[0] + cycle - x
+                            i.append(np.array([idx - 1, 0]))
+                            p.append(np.array([d1, d2]) / (d1 + d2))
+                            in_range = True
+                        else:
+                            x -= cycle
         indices = np.zeros((1,), dtype=int)
         probs = np.ones((1,), dtype=self.dtype)
         for dim, (idx, prob) in enumerate(zip(i, p)):

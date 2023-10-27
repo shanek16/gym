@@ -139,18 +139,13 @@ class Viewer(object):
         self.window.switch_to()
         self.window.dispatch_events()
         self.transform.enable()
-        # self.label.draw()                        
         for geom in self.geoms:
             geom.render()
         for geom in self.onetime_geoms:
-            # print('in onetime_geoms')
-            # print(geom)
             geom.render()
         for label in self.label:
             label.draw()      
         for label in self.onetime_label:
-            # print('in onetime_label') # why doesn't this work?
-            # print(label)
             label.draw()                 
         self.transform.disable()
         arr = None

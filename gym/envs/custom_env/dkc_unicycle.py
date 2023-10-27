@@ -8,7 +8,7 @@ from gym import Env
 from gym.spaces import Box
 from gym.utils import seeding
 from numpy import arctan2, array, cos, pi, sin
-# import rendering
+import rendering
 
 warnings.filterwarnings("ignore")
 
@@ -23,7 +23,7 @@ class DKC_Unicycle(Env):
         sigma=0.0,
         dt=0.05,
         v=1.0,
-        d=5.0,
+        d=10.0,
         d_min=4.5,
         k1=0.0181,
         max_step=2000, # is max_step=2000 sufficient for the uav(r=75) to reach the target? -> Yes it is. it takes less than 1800 steps.
@@ -122,6 +122,7 @@ class DKC_Unicycle(Env):
         x, y = self.state[:2] #+ self.sigma * self.np_random.randn(2)  # self.sigma=0 anyways
         r = (x**2 + y**2) ** 0.5
         alpha = wrap(arctan2(y, x) - wrap(self.state[-1]) - pi)
+        # print("r: ", r)
         return array([r, alpha])
 
     def close(self):
