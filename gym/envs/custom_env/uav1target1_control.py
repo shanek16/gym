@@ -9,6 +9,7 @@ from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
 import rendering
+import argparse
 
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
@@ -17,13 +18,11 @@ import cv2
 
 
 class UAV1Target1(Env):
-    '''
-    For Testing of policy solved by DP, use uav1target_control.py
-    '''
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
         self,
+        args,
         r_max=80,
         r_min=0,
         dt=0.05,
@@ -35,8 +34,7 @@ class UAV1Target1(Env):
         r_c=3,
         d_min=4.5,
         max_step=6000,
-        # R_fall = 50000,
-        seed = None # one circle 1200 time steps
+        seed = None, # one circle 1200 time steps
     ):
         super().__init__()
         self.seed = seed
@@ -57,12 +55,12 @@ class UAV1Target1(Env):
                 #     high=np.float32([3000]),
                 #     dtype=np.float32,
                 # ),
-                "battery": Discrete(3001),
-                "age": Discrete(11),
+                "battery": Discrete(3000),
+                "age": Discrete(10),
             }
         )
         self.action_space = Discrete(2, seed = self.seed)  # 0: charge, 1: surveillance
-        self.dt = dt
+        self.dt = args.dt
         self.v = v
         self.vdt = v * dt
         self.d = d  # target distance
@@ -91,8 +89,9 @@ class UAV1Target1(Env):
         self.episode_counter = 0
         self.frame_counter = 0
         self.save_frames = False
-        self.discount = 0.9999
-        # self.R_fall = R_fall
+        self.discount = args.gamma
+        self.future = args.future
+        self.solver = args.solver
         self.print_q_init()
 
         # initialization for Dynamic Programming
@@ -195,9 +194,9 @@ class UAV1Target1(Env):
         self.charge_alpha_space = np.linspace(-np.pi, np.pi - np.pi / self.n_alpha, self.n_alpha, dtype=np.float32)
         self.battery_space = np.concatenate([np.arange(0, 500, 100), np.arange(500, 3100, 500)])
 
-        self.age_space = np.arange(11)
-        # self.age_space = np.arange(0,110,10)
-        self.UAV1Target1_result00 = np.load(f"/home/shane16/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/RESULTS/1U1T_s6_gamma_{self.discount}_dt_{self.dt}_{'val'}_iter.npz")
+        # self.age_space = np.arange(11)
+        self.age_space = np.arange(0,110,10)
+        self.UAV1Target1_result00 = np.load(f"/home/shane16/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/RESULTS/1U1T_s6_gamma_{self.discount}_dt_{self.dt}_{self.solver}_iter.npz")
         self.UAV1Target1_straightened_policy00 = self.UAV1Target1_result00["policy"]
         self.UAV1Target1_values00 = self.UAV1Target1_result00["values"]
         # print('shape of UAV1Target1_straightened_policy00: ', np.shape(self.UAV1Target1_straightened_policy00))
@@ -255,10 +254,8 @@ class UAV1Target1(Env):
         action = np.squeeze(action)
         # action clipping is done in dp already
         self.uav_is_charging = 0
-        # reward = 0
         if self.battery <= 0: # UAV dead
             self.surveillance = 0
-            # reward += -self.R_fall
         else: # UAV alive: can take action
             if action == 0:  # go to charge uav1
                 if (self.observation[0] < self.r_c):
@@ -284,7 +281,6 @@ class UAV1Target1(Env):
 
         self.cal_age()
         reward = -self.age
-        # reward += -self.age
         # if self.battery == 0: # battery
         #     reward -= 2265
         # elif self.battery == 3000 and self.uav_is_charging:
@@ -383,7 +379,6 @@ class UAV1Target1(Env):
             uav_is_charging_copy = 0
             if battery_copy <= 0:  # UAV dead
                 surveillance_copy = 0
-                # reward += -self.R_fall*discount**i
             else:
                 if action == 0:
                     if (dry_dict_observation['uav1_charge_station'][0] < self.r_c):
@@ -484,46 +479,46 @@ class UAV1Target1(Env):
             uav1_tri = self.viewer.draw_polygon([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)])
             uav1_tri.set_color(1, 1, 1)  # (1,1,0)yellow
             uav1_tri.add_attr(uav1_tf)
-        return self.viewer.render(return_rgb_array=mode == "rgb_array")
-        # # draw text
-        # self.print_q_value()
-        # image = self.viewer.render(return_rgb_array=True)
-        # image = Image.fromarray(image)
-        # draw = ImageDraw.Draw(image)
-        # # left upper corner
-        # text0 = f"r_c: {self.observation[0]:.2f}, a_c: {self.observation[1]/np.pi:.2f}π"
-        # text1 = f"r_t: {self.rel_observation[0]:.2f}, a_t: {self.rel_observation[1]/np.pi:.2f}π"
-        # text2 = f"max_Q: {self.max_Q:.2f}"
-        # text3 = f"dQ: {self.max_Q - self.min_Q:.2f}"
-        # text4 = f"argmax(Q0,Q1): {self.argmax_Q}"
-        # text5 = "battery: {}".format(self.battery)
-        # text6 = "age: {}".format(self.age)
-        # text7 = "Reward: {}".format(-self.age)
-        # draw.text((0, 0), text0, color=(200, 200, 200), font=self.font)
-        # draw.text((0, 20), text1, color=(200, 200, 200), font=self.font)
-        # draw.text((0, 40), text2, color=(255, 255, 0), font=self.font)
-        # draw.text((0, 60), text3, color=(200, 200, 200), font=self.font)
-        # draw.text((0, 80), text4, color=(200, 200, 200), font=self.font)
-        # draw.text((0, 100), text5, color=(255, 255, 255), font=self.font)
-        # draw.text((0, 120), text6, color=(255, 255, 255), font=self.font)
-        # draw.text((0, 140), text7, color=(255, 255, 255), font=self.font)   
-        # # Convert the PIL image to a format that OpenCV can display
-        # cv_image = np.array(image)
-        # # Convert RGB to BGR for OpenCV
-        # cv_image = cv_image[:, :, ::-1].copy()
-        # # Display the image
-        # cv2.imshow('Image Window', cv_image)
-        # # Wait for a key event
-        # key = cv2.waitKey(int(not control))
-        # # Process the key event
-        # if key == 0x2c:  # <
-        #     action = 0
-        # elif key == 0x2e:  # >
-        #     action = 1
-        # if control:
-        #     return cv_image, action
-        # else:
-        #     return cv_image
+        # return self.viewer.render(return_rgb_array=mode == "rgb_array")
+        # draw text
+        self.print_q_value()
+        image = self.viewer.render(return_rgb_array=True)
+        image = Image.fromarray(image)
+        draw = ImageDraw.Draw(image)
+        # left upper corner
+        text0 = f"r_c: {self.observation[0]:.2f}, a_c: {self.observation[1]/np.pi:.2f}π"
+        text1 = f"r_t: {self.rel_observation[0]:.2f}, a_t: {self.rel_observation[1]/np.pi:.2f}π"
+        text2 = f"max_Q: {self.max_Q:.2f}"
+        text3 = f"dQ: {self.max_Q - self.min_Q:.2f}"
+        text4 = f"argmax(Q0,Q1): {self.argmax_Q}"
+        text5 = "battery: {}".format(self.battery)
+        text6 = "age: {}".format(self.age)
+        text7 = "Reward: {}".format(-self.age)
+        draw.text((0, 0), text0, color=(200, 200, 200), font=self.font)
+        draw.text((0, 20), text1, color=(200, 200, 200), font=self.font)
+        draw.text((0, 40), text2, color=(255, 255, 0), font=self.font)
+        draw.text((0, 60), text3, color=(200, 200, 200), font=self.font)
+        draw.text((0, 80), text4, color=(200, 200, 200), font=self.font)
+        draw.text((0, 100), text5, color=(255, 255, 255), font=self.font)
+        draw.text((0, 120), text6, color=(255, 255, 255), font=self.font)
+        draw.text((0, 140), text7, color=(255, 255, 255), font=self.font)   
+        # Convert the PIL image to a format that OpenCV can display
+        cv_image = np.array(image)
+        # Convert RGB to BGR for OpenCV
+        cv_image = cv_image[:, :, ::-1].copy()
+        # Display the image
+        cv2.imshow('Image Window', cv_image)
+        # Wait for a key event
+        key = cv2.waitKey(int(not control))
+        # Process the key event
+        if key == 0x2c:  # <
+            action = 0
+        elif key == 0x2e:  # >
+            action = 1
+        if control:
+            return cv_image, action
+        else:
+            return cv_image
 
     # relative position
     @property
@@ -588,8 +583,8 @@ class UAV1Target1(Env):
     def print_q_value(self):
         # dry_step with 1 env
         # 1) get reward for each action: 0 & 1
-        state0, reward0, _, _, _ = self.dry_step(action=0)
-        state1, reward1, _, _, _ = self.dry_step(action=1)
+        state0, reward0, _, _, _ = self.dry_step(action=0, future=self.future, discount=self.discount)
+        state1, reward1, _, _, _ = self.dry_step(action=1, future=self.future, discount=self.discount)
 
         # 2) get Value for each action
         S0, P0 = self.uav1target1_states.computeBarycentric(state0)
@@ -625,6 +620,42 @@ def L1(x):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-g",
+        "--gamma",
+        type=float,
+        required=False,
+        default=0.9999,
+        help="discount factor",
+    )
+
+    parser.add_argument(
+        "-sol",
+        "--solver",
+        type=str,
+        required=False,
+        default="val",
+        help="'val' for Value Iteration, 'pol' for Policy Iteration",
+    )
+
+    parser.add_argument(
+        "--future",
+        type=int,
+        required=False,
+        default=10,
+        help="how much time step to look out to choose action",
+    )
+
+    parser.add_argument(
+    "--dt",
+    type=float,
+    required=False,
+    default=0.05,
+    help="dt of env",
+)
+
+    args = parser.parse_args()
     # test return of dry_step == step
     ''' env = UAV1Target1()
     env.reset()
@@ -633,7 +664,7 @@ if __name__ == "__main__":
     print(state0)
     print(state)'''
     
-    uav_env = UAV1Target1()
+    uav_env = UAV1Target1(args)
     # action_sample = uav_env.action_space.sample()
     # print("action_sample: ", action_sample)
 
@@ -644,7 +675,7 @@ if __name__ == "__main__":
     print('uav_env.action_space.n: ', uav_env.action_space.n)'''
     
     # testing env: heuristic policy
-    repitition = 10
+    '''repitition = 10
     avg_reward = 0
     for i in range(repitition):
         step = 0
@@ -656,9 +687,9 @@ if __name__ == "__main__":
         while truncated == False:
             step += 1
             r_c = obs['uav1_charge_station'][0]
-            if bat > 1500:
+            if bat > 2000:
                 action = 1
-            elif bat > 500:
+            elif bat > 1000:
                 if age == 10:
                     action = 0
                 else:
@@ -679,11 +710,12 @@ if __name__ == "__main__":
         print(f'{i}: {total_reward}')   
         avg_reward += total_reward
     avg_reward /= repitition
-    print(f'average reward: {avg_reward}')
+    print(f'average reward: {avg_reward}')'''
 
     # testing env: reset and control
-    '''    # r_t, a_t, r_c, a_c, battery, age    
-    state=[0, 0, 0, 0, 3000, 0]
+        # r_t, a_t, r_c, a_c, battery, age
+    # {'uav1_target1': array([13.789597 ,  2.4726965]), 'uav1_charge_station': array([ 2.562472 , -0.5970651]), 'battery': 3000.0, 'age': 10}
+    state=[13.789597, 2.4726965, 2.562472, -0.5970651, 3000, 10]
     uav_x = state[2] * np.cos(state[3] + np.pi) # r_c*cos(beta_c=(alpha + pi))
     uav_y = state[2] * np.sin(state[3] + np.pi) # r_c*sin(beta_c=(alpha + pi))
     uav_theta = 0
@@ -714,6 +746,7 @@ if __name__ == "__main__":
     while truncated == False:
         try:
             step += 1
+            print(uav_env.dt)
             obs, reward, _, truncated, _ = uav_env.step(action)
             total_reward += reward
             # uav_env.print_q_value()
@@ -722,7 +755,7 @@ if __name__ == "__main__":
             print("\nExiting gracefully...")
             break
     print(f'total reward: {total_reward}')
-    cv2.destroyAllWindows()'''
+    cv2.destroyAllWindows()
     
     # testing env: alternating action
     '''obs, _ = uav_env.reset()
