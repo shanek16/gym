@@ -58,7 +58,7 @@ class UAV1Target1(Env):
                 #     dtype=np.float32,
                 # ),
                 "battery": Discrete(3001),
-                "age": Discrete(11),
+                "age": Discrete(2001),
             }
         )
         self.action_space = Discrete(2, seed = self.seed)  # 0: charge, 1: surveillance
@@ -195,7 +195,8 @@ class UAV1Target1(Env):
         self.charge_alpha_space = np.linspace(-np.pi, np.pi - np.pi / self.n_alpha, self.n_alpha, dtype=np.float32)
         self.battery_space = np.concatenate([np.arange(0, 500, 100), np.arange(500, 3100, 500)])
 
-        self.age_space = np.arange(11)
+        self.age_space = np.arange(0, 2001, 100)
+        # self.age_space = np.arange(11)
         # self.age_space = np.arange(0,110,10)
         self.UAV1Target1_result00 = np.load(f"/home/shane16/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/RESULTS/1U1T_s6_gamma_{self.discount}_dt_{self.dt}_{'val'}_iter.npz")
         self.UAV1Target1_straightened_policy00 = self.UAV1Target1_result00["policy"]
@@ -356,7 +357,7 @@ class UAV1Target1(Env):
 
     def dry_cal_age(self, surveillance_copy, age_copy):
         if surveillance_copy == 0:
-            age_copy = min(10, age_copy + 1)
+            age_copy = min(2000, age_copy + 1)
         else:
             age_copy = 0
         return age_copy
@@ -404,15 +405,16 @@ class UAV1Target1(Env):
             target_x, target_y = self.target1_state
             x = target_x - uav_x
             y = target_y - uav_y
-            r_t = (x**2 + y**2) ** 0.5
+            r_t = np.sqrt(x**2 + y**2) #(x**2 + y**2) ** 0.5
             beta_t = arctan2(y, x)
             alpha_t = wrap(beta_t - wrap(theta))
 
             # relative r, alpha of uav1_charge_station == self.observation[:2]
-            r_c = (uav_x**2 + uav_y**2) ** 0.5
+            r_c = np.sqrt(uav_x**2 + uav_y**2)
                         # beta                # theta
             alpha_c = wrap(arctan2(uav_y, uav_x) - wrap(theta) - pi)
-            surveillance_copy = self.dry_cal_surveillance(uav_is_charging_copy, r_t)
+            if battery_copy > 0:
+                surveillance_copy = self.dry_cal_surveillance(uav_is_charging_copy, r_t)
 
             age_copy = self.dry_cal_age(surveillance_copy, age_copy)
 
@@ -420,7 +422,7 @@ class UAV1Target1(Env):
             if step_count_copy >= self.max_step:
                 truncated = True
 
-            dry_dict_observation = {
+            dry_dict_observation = { # is this state s_{t+10}?: Yes it is
                 # r, alpha
                 "uav1_target1": np.float32([r_t, alpha_t]),
                 "uav1_charge_station": np.float32([r_c, alpha_c]),
@@ -529,7 +531,7 @@ class UAV1Target1(Env):
     @property
     def observation(self): # of uav relative to charging station
         x, y = self.uav1_state[:2]
-        r = (x**2 + y**2) ** 0.5
+        r = np.sqrt(x**2 + y**2)
                     # beta                  # theta
         alpha = wrap(arctan2(y, x) - wrap(self.uav1_state[-1]) - pi)
         beta = arctan2(y, x)
@@ -538,7 +540,7 @@ class UAV1Target1(Env):
     @property
     def target1_obs(self): # absolute position of target
         x, y = self.target1_state[:2]
-        r = (x**2 + y**2) ** 0.5
+        r = np.sqrt(x**2 + y**2)
         beta = arctan2(y, x)
         return array([r, beta])  # beta
 
@@ -549,7 +551,7 @@ class UAV1Target1(Env):
         target_x, target_y = self.target1_state
         x = target_x - uav_x
         y = target_y - uav_y
-        r = (x**2 + y**2) ** 0.5
+        r = np.sqrt(x**2 + y**2)
         beta = arctan2(y, x)
         alpha = wrap(beta - wrap(theta))
         return array([r, alpha, beta])
@@ -567,7 +569,7 @@ class UAV1Target1(Env):
 
     def cal_age(self):
         if self.surveillance == 0: # uav1 is not surveilling
-            self.age = min(10, self.age + 1)
+            self.age = min(2000, self.age + 1)
         else:
             self.age = 0
 
@@ -656,23 +658,21 @@ if __name__ == "__main__":
         while truncated == False:
             step += 1
             r_c = obs['uav1_charge_station'][0]
-            if bat > 1500:
+            if bat > 2000:
                 action = 1
-            elif bat > 500:
-                if age == 10:
-                    action = 0
-                else:
+            elif bat > 1000:
+                if age == 0 or age > 800: # uav was surveilling
                     action = 1
+                else: # uav was charging
+                    action = 0
             else:
                 action = 0
-            # if bat < 1000: # This uses previous action -> Not Markov
-            #     action = 0
             
             obs, reward, _, truncated, _ = uav_env.step(action)
             total_reward += reward
             bat = obs['battery']
             age = obs['age']
-            # print(f'step: {step} | battery: {bat} | age: {age} | reward: {reward}', end=' |')
+            # print(f'step: {step} | battery: {bat} | reward: {reward}') #, end=' |')
             # print(f'action: {action}')#, end=' |')
             # uav_env.print_q_value()
             # uav_env.render(action, mode='rgb_array')

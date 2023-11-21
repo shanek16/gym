@@ -194,8 +194,7 @@ class UAV1Target1(Env):
         self.charge_alpha_space = np.linspace(-np.pi, np.pi - np.pi / self.n_alpha, self.n_alpha, dtype=np.float32)
         self.battery_space = np.concatenate([np.arange(0, 500, 100), np.arange(500, 3100, 500)])
 
-        # self.age_space = np.arange(11)
-        self.age_space = np.arange(0,110,10)
+        self.age_space = np.arange(11)
         self.UAV1Target1_result00 = np.load(f"/home/shane16/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/RESULTS/1U1T_s6_gamma_{self.discount}_dt_{self.dt}_{self.solver}_iter.npz")
         self.UAV1Target1_straightened_policy00 = self.UAV1Target1_result00["policy"]
         self.UAV1Target1_values00 = self.UAV1Target1_result00["values"]
@@ -715,7 +714,11 @@ if __name__ == "__main__":
     # testing env: reset and control
         # r_t, a_t, r_c, a_c, battery, age
     # {'uav1_target1': array([13.789597 ,  2.4726965]), 'uav1_charge_station': array([ 2.562472 , -0.5970651]), 'battery': 3000.0, 'age': 10}
-    state=[13.789597, 2.4726965, 2.562472, -0.5970651, 3000, 10]
+    #  dt=0.05) Stuck at:
+    # {'uav1_target1': array([14.074364 ,  1.1763624]),
+    #  'uav1_charge_station': array([ 2.9848685, -1.1933811]), 'battery': 3000.0, 'age': 10}
+    # state=[70, -3.1415927, 40, -3.1415927, 3000, 0] # Farset distance: uav<-> target
+    state=[30, 0, 0, -3.1415927, 3000, 10]
     uav_x = state[2] * np.cos(state[3] + np.pi) # r_c*cos(beta_c=(alpha + pi))
     uav_y = state[2] * np.sin(state[3] + np.pi) # r_c*sin(beta_c=(alpha + pi))
     uav_theta = 0
@@ -746,7 +749,7 @@ if __name__ == "__main__":
     while truncated == False:
         try:
             step += 1
-            print(uav_env.dt)
+            print(step)
             obs, reward, _, truncated, _ = uav_env.step(action)
             total_reward += reward
             # uav_env.print_q_value()
