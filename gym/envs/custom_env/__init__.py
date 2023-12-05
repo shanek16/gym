@@ -13,5 +13,8 @@ from gym.envs.custom_env.rand_cycle_rel_box_v0 import Rand_cycle_rel_box_v0
 # abs position for my_v3
 from gym.envs.custom_env.rand_cycle_abs_box_v3 import Rand_cycle_abs_box_v3
 from gym.envs.custom_env.uav1target1 import UAV1Target1
+from gym.envs.custom_env.uav1target1_ver2 import UAV1Target1_v2
+from gym.envs.custom_env.mumt import MUMT
+from gym.envs.custom_env.mumt_v2 import MUMT_v2
 from gym.envs.custom_env.dkc_unicycle import DKC_Unicycle
 from gym.envs.custom_env.toc_unicycle import TOC_Unicycle

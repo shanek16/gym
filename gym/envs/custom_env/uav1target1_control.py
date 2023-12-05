@@ -8,7 +8,7 @@ import numpy as np
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
-import rendering
+# import rendering
 import argparse
 
 from mdp import Actions, States

@@ -389,6 +389,24 @@ register(
 )
 
 register(
+    id="UAV1Target1_ver2",
+    entry_point="gym.envs.custom_env.uav1target1_ver2:UAV1Target1_v2",
+    max_episode_steps=6000,
+)
+
+register(
+    id="MUMT",
+    entry_point="gym.envs.custom_env.mumt:MUMT",
+    max_episode_steps=6000,
+)
+
+register(
+    id="MUMT_v2",
+    entry_point="gym.envs.custom_env.mumt_v2:MUMT_v2",
+    max_episode_steps=6000,
+)
+
+register(
     id="DKC_Unicycle",
     entry_point="gym.envs.custom_env.dkc_unicycle:DKC_Unicycle",
     max_episode_steps=2000,

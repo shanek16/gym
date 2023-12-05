@@ -6,36 +6,102 @@ desired_path = os.path.expanduser("~/Project/model_guard/uav_paper/Stochastic op
 sys.path.append(desired_path)
 import numpy as np
 from gym import Env
-from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
+from gym.spaces import Box, Dict, Discrete # MultiBinary, MultiDiscrete
 from typing import Optional
 # import rendering
 
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
-import cv2
 
+def wrap(theta):
+    if theta > pi:
+        theta -= 2 * pi
+    elif theta < -pi:
+        theta += 2 * pi
+    return theta
 
-class UAV1Target1(Env):
+class UAV1Target1_v2(Env):
     '''
-    For Testing of policy solved by DP, use uav1target_control.py
+    Verion 2: using class for uav and target.
+    Preparing for multi uavs and multi targets.
     '''
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
+    class UAV:
+        def __init__(
+            self,
+            state,
+            v=1.0,
+            battery=3000,
+            ):
+            self.v = v
+            self.dt = 0.05
+            self.state = state
+            self.battery = battery
+            self.charging = 0
+        
+        def copy(self):
+            # Create a new UAV instance with the same attributes
+            return UAV1Target1_v2.UAV(state=self.state.copy(), v=self.v, battery=self.battery)
+    
+        def move(self, action):
+            dtheta = action * self.dt
+            _lambda = dtheta / 2
+            if _lambda == 0.0:
+                self.state[0] += self.v*self.dt * cos(self.state[-1])
+                self.state[1] += self.v*self.dt * sin(self.state[-1])
+            else:
+                ds = self.v*self.dt * sin(_lambda) / _lambda
+                self.state[0] += ds * cos(self.state[-1] + _lambda)
+                self.state[1] += ds * sin(self.state[-1] + _lambda)
+                self.state[2] += dtheta
+                self.state[2] = wrap(self.state[2])
+        @property
+        def obs(self): # observation of uav relative to charging station
+            x, y = self.state[:2]
+            r = np.sqrt(x**2 + y**2)
+                        # beta                  # theta
+            alpha = wrap(arctan2(y, x) - wrap(self.state[-1]) - pi)
+            beta = arctan2(y, x)
+            return array([r, alpha, beta])  # beta
+
+    class Target:
+        def __init__(
+            self,
+            state,
+            age = 0,
+            ):
+            self.state = state
+            self.surveillance = None
+            self.age = age
+
+        def copy(self):
+            # Create a new Target instance with the same attributes
+            return UAV1Target1_v2.Target(state=self.state.copy(), age=self.age)
+        
+        def cal_age(self):
+            if self.surveillance == 0: # uav1 is not surveilling
+                self.age = min(1000, self.age + 1) #changeage
+            else:
+                self.age = 0
+        @property
+        def obs(self): # polar coordinate of a target
+            x, y = self.state
+            r = np.sqrt(x**2 + y**2)
+            beta = arctan2(y, x)
+            return array([r, beta])  # beta
 
     def __init__(
         self,
         r_max=80,
         r_min=0,
         dt=0.05,
-        v=1.0,
         d=10.0,
         l=3, # noqa
-        m=1, # of targets
-        n=1, # of uavs
+        m=1, # of uavs
+        n=1, # of targets
         r_c=3,
-        d_min=4.5,
         max_step=6000,
-        # R_fall = 50000,
         seed = None # one circle 1200 time steps
     ):
         super().__init__()
@@ -59,42 +125,25 @@ class UAV1Target1(Env):
                 # ),
                 "battery": Discrete(3001),
                 "age": Discrete(1001), #changeage
-                # "previous_action": Discrete(2),
             }
         )
         self.action_space = Discrete(2, seed = self.seed)  # 0: charge, 1: surveillance
         self.dt = dt
-        self.v = v
-        self.vdt = v * dt
+        self.discount = 0.999
         self.d = d  # target distance
         self.l = l  # coverage gap: coverage: d-l ~ d+l # noqa
         self.m = m  # of targets
         self.n = n  # of uavs
         self.r_c = r_c  # charge station radius
-        self.omega_max = v / d_min
         self.step_count = None
-        self.uav1_state = None
-        self.target1_state = None
-        self.battery = 3000  # 3rounds*1200steps/round
-        self.age = 0
-        # self.previous_action = 0
-        self.uav_is_charging = 0
-        self.surveillance = None
-        # for debugging
-        # self.uav1docked_time = 0
-        self.font = ImageFont.truetype(
-            "/usr/share/fonts/truetype/freefont/FreeMono.ttf", 20
-        )
+        self.font = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 20)
         self.num2str = {0: "charge", 1: "target_1"}
-
         self.max_step = max_step
         self.viewer = None
         self.SAVE_FRAMES_PATH = "../../../../visualized/1U1T" # example. save frames path is set at surveillance_PPO.py
         self.episode_counter = 0
         self.frame_counter = 0
         self.save_frames = False
-        self.discount = 0.9999
-        # self.R_fall = R_fall
         self.print_q_init()
 
         # initialization for Dynamic Programming
@@ -103,11 +152,8 @@ class UAV1Target1(Env):
         self.n_u = 2 #21
 
         current_file_path = os.path.dirname(os.path.abspath(__file__))
-        # self.distance_keeping_result00 = np.load(current_file_path+ os.path.sep + "v2_80_dkc_mdp_fp64.npz")
         self.distance_keeping_result00 = np.load(current_file_path+ os.path.sep + "v1_80_2a_dkc_val_iter.npz")
         self.distance_keeping_straightened_policy00 = self.distance_keeping_result00["policy"] # .data
-        # self.time_optimal_straightened_policy00 = np.load(current_file_path+ os.path.sep + "v2_terminal_40+40_toc_policy_fp64.npy")
-        # self.time_optimal_straightened_policy00 = np.load(current_file_path+ os.path.sep + "terminal_40+40_toc_policy_fp64.npy")
         self.time_optimal_straightened_policy00 = np.load(current_file_path+ os.path.sep + "v1_terminal_40+40_2a_toc_policy_fp64.npy")
         # print('shape of time_optimal_straightened_policy00',np.shape(self.time_optimal_straightened_policy00)) # 288000
 
@@ -130,11 +176,10 @@ class UAV1Target1(Env):
 
     def reset(
         self,
-        uav1_pose=None,
-        target1_pose=None,
-        battery=None,
-        age=None,
-        # previous_action=None,
+        uav_pose=None,
+        target_pose=None,
+        battery=3000,
+        age=0,
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ):
@@ -149,42 +194,28 @@ class UAV1Target1(Env):
                 exist_ok=True,
             )
             self.frame_counter = 0
-        if uav1_pose is None:
-            uav1_r = np.random.uniform(0, 40)  # D=40
-            uav1_beta = np.random.uniform(-pi, pi)
-            self.uav1_state = array(
+        if uav_pose is None:
+            uav_r = np.random.uniform(0, 40)  # D=40
+            uav_beta = np.random.uniform(-pi, pi)
+            uav_theta = np.random.uniform(-pi, pi)
+            uav_state = array(
                 (
-                    uav1_r * cos(uav1_beta),
-                    uav1_r * sin(uav1_beta),
-                    np.random.uniform(-pi, pi),  # = theta
+                    uav_r * cos(uav_beta),
+                    uav_r * sin(uav_beta),
+                    uav_theta
                 )
             )
         else:
-            self.uav1_state = uav1_pose
+            uav_state = uav_pose
+        self.uav1 = self.UAV(state=uav_state, battery=battery)
 
-        if target1_pose is None:
+        if target_pose is None:
             target1_r = np.random.uniform(0, 30)  # 0~ D-d
             target1_beta = np.random.uniform(-pi, pi)
-            self.target1_state = array(
-                (target1_r * cos(target1_beta), target1_r * sin(target1_beta))
-            )
+            target_state = array((target1_r * cos(target1_beta), target1_r * sin(target1_beta)))
         else:
-            self.target1_state = target1_pose
-
-        if battery is None:
-            self.battery = 3000
-        else:
-            self.battery = battery
-        
-        if age is None:
-            self.age = 0
-        else:
-            self.age = age
-
-        # if previous_action is None:
-        #     self.previous_action = 0
-        # else:
-        #     self.previous_action = previous_action
+            target_state = target_pose
+        self.target1 = self.Target(state = target_state, age=age)
 
         return self.dict_observation, {}
 
@@ -205,10 +236,7 @@ class UAV1Target1(Env):
         self.battery_space = np.concatenate([np.arange(0, 500, 100), np.arange(500, 3100, 500)])
 
         self.age_space = np.arange(0, 1001, 100) #changeage
-        # self.previous_action_space = np.array([0, 1])
-        # self.age_space = np.arange(11)
-        # self.age_space = np.arange(0,110,10)
-        self.UAV1Target1_result00 = np.load(f"/home/shane16/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/RESULTS/1U1T_s6_gamma_{self.discount}_dt_{self.dt}_{'val'}_iter.npz")
+        self.UAV1Target1_result00 = np.load(f"/home/shane16/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/RESULTS/1U1T_s6_age1000:100_gamma_{self.discount}_dt_{self.dt}_{'val'}_iter.npz")
         self.UAV1Target1_straightened_policy00 = self.UAV1Target1_result00["policy"]
         self.UAV1Target1_values00 = self.UAV1Target1_result00["values"]
         # print('shape of UAV1Target1_straightened_policy00: ', np.shape(self.UAV1Target1_straightened_policy00))
@@ -224,34 +252,14 @@ class UAV1Target1(Env):
             # battery_state
             self.battery_space,              # [4]
             self.age_space,                  # [5]
-            # self.previous_action_space,      # [6]
             cycles=[np.inf, np.pi*2, np.inf, np.pi*2, np.inf, np.inf]
         )
-
-    def uav1kinematics(self, action):
-        dtheta = action * self.dt
-        _lambda = dtheta / 2
-        if _lambda == 0.0:
-            self.uav1_state[0] += self.vdt * cos(self.uav1_state[-1])
-            self.uav1_state[1] += self.vdt * sin(self.uav1_state[-1])
-        else:
-            ds = self.vdt * sin(_lambda) / _lambda
-            self.uav1_state[0] += ds * cos(self.uav1_state[-1] + _lambda)
-            self.uav1_state[1] += ds * sin(self.uav1_state[-1] + _lambda)
-            self.uav1_state[2] += dtheta
-            self.uav1_state[2] = wrap(self.uav1_state[2])
 
     def toc_get_action(self, state):
         S, P = self.states.computeBarycentric(state)
         action = 0
-        # print('states.num_states: ',self.states.num_states) # 288000
-        # print('states.shape: ', self.states.shape) # (800, 360)
         for s, p in zip(S, P):
-            # try:
             action += p * self.actions[int(self.time_optimal_straightened_policy00[s])]
-            # except:
-            #     print('s: ', s)
-            #     print('int(self.time_optimal_straightened_policy00[s]): ',int(self.time_optimal_straightened_policy00[s]))
         return action
 
     def dkc_get_action(self, state):
@@ -266,43 +274,27 @@ class UAV1Target1(Env):
         truncated = False
         action = np.squeeze(action)
         # action clipping is done in dp already
-        self.uav_is_charging = 0
+        self.uav1.charging = 0
         # reward = 0
-        if self.battery <= 0: # UAV dead
-            self.surveillance = 0
-            # reward += -self.R_fall
+        if self.uav1.battery <= 0: # UAV dead
+            pass
         else: # UAV alive: can take action
             if action == 0:  # go to charge uav1
-                if (self.observation[0] < self.r_c):
+                if (self.uav1.obs[0] < self.r_c):
                     # uav1 no move
-                    self.uav_is_charging = 1
-                    # if self.uav1docked_time == 0:  # landing
-                    #     self.uav1docked_time += 1
-                    #     # battery stays the same(docking time)
-                    # else:  # uav1docked_time > 0
-                    self.battery = min(self.battery + 10, 3000)
-                    # self.uav1docked_time += 1
+                    self.uav1.charging = 1
+                    self.uav1.battery = min(self.uav1.battery + 10, 3000)
                 else:  # not able to land on charge station(too far)
-                    # self.uav1docked_time = 0
-                    self.battery -= 1
-                    w1_action = self.toc_get_action(self.observation[:2])
-                    self.uav1kinematics(w1_action)
+                    self.uav1.battery -= 1
+                    w1_action = self.toc_get_action(self.uav1.obs[:2])
+                    self.uav1.move(w1_action)
             else:  # surveil target1
-                # self.uav1docked_time = 0
-                self.battery -= 1
+                self.uav1.battery -= 1
                 w1_action = self.dkc_get_action(self.rel_observation[:2])
-                self.uav1kinematics(w1_action)
-            self.cal_surveillance()
-
-        self.cal_age()
-        reward = -self.age
-        # reward += -self.age
-        # if self.battery == 0: # battery
-        #     reward -= 2265
-        # elif self.battery == 3000 and self.uav_is_charging:
-        #     reward -= 3000
-        # self.previous_action = action
-
+                self.uav1.move(w1_action)
+        self.cal_surveillance()
+        self.target1.cal_age()
+        reward = -self.target1.age
         if self.save_frames:
             self.print_q_value()
             if int(self.step_count) % 6 == 0:
@@ -315,16 +307,14 @@ class UAV1Target1(Env):
                 image = Image.fromarray(image)
                 draw = ImageDraw.Draw(image)
                 # left upper corner
-                text0 = f"r_c: {self.observation[0]}, a_c: {self.observation[1]}"
-                text1 = f"r_t: {self.target1_obs[0]}, a_t: {self.target1_obs[1]}"
+                text0 = f"r_c: {self.uav1.obs[0]}, a_c: {self.uav1.obs[1]}"
+                text1 = f"r_t: {self.target1.obs[0]}, a_t: {self.target1.obs[1]}"
                 text2 = f"max_Q: {self.max_Q:.2f}"
                 text3 = f"dQ: {self.max_Q - self.min_Q:.2f}"
                 text4 = f"argmax(Q0,Q1): {self.argmax_Q}"
-                text5 = "battery: {}".format(self.battery)
-                text6 = "age: {}".format(self.age)
+                text5 = "battery: {}".format(self.uav1.battery)
+                text6 = "age: {}".format(self.target1.age)
                 text7 = "Reward: {}".format(reward)
-                # right uppper corner
-                # text6 = "r11: {0:0.0f}".format(abs(self.rel_observation[0]-10))
 
                 draw.text((0, 0), text0, color=(200, 200, 200), font=self.font)
                 draw.text((0, 20), text1, color=(200, 200, 200), font=self.font)
@@ -334,10 +324,6 @@ class UAV1Target1(Env):
                 draw.text((0, 100), text5, color=(255, 255, 255), font=self.font)
                 draw.text((0, 120), text6, color=(255, 255, 255), font=self.font)
                 draw.text((0, 140), text7, color=(255, 255, 255), font=self.font)         
-                # right uppper corner
-                # draw.text((770, 0), text5, color=(255, 255, 255), font=self.font)
-                # draw.text((770, 20), text6, color=(255, 255, 255), font=self.font)
-                # draw.text((750, 40), text7, color=(255, 255, 255), font=self.font)         
                 image.save(path)
                 self.frame_counter += 1
         self.step_count += 1
@@ -345,43 +331,22 @@ class UAV1Target1(Env):
             truncated = True
         return self.dict_observation, reward, terminal, truncated, {}
 
-    def dry_uav1kinematics(self, action, uav1_state_copy):
-        dtheta = action * self.dt
-        _lambda = dtheta / 2
-        if _lambda == 0.0:
-            uav1_state_copy[0] += self.vdt * cos(uav1_state_copy[-1])
-            uav1_state_copy[1] += self.vdt * sin(uav1_state_copy[-1])
-        else:
-            ds = self.vdt * sin(_lambda) / _lambda
-            uav1_state_copy[0] += ds * cos(uav1_state_copy[-1] + _lambda)
-            uav1_state_copy[1] += ds * sin(uav1_state_copy[-1] + _lambda)
-            uav1_state_copy[2] += dtheta
-            # Assuming wrap is a helper function, we need to handle it too
-            # uav1_state_copy[2] = wrap(uav1_state_copy[2])
-        return uav1_state_copy
-
-    def dry_cal_surveillance(self, uav_is_charging_copy, rel_r_uav1_target1):
-        surveillance_copy = 0
-        if (self.d - self.l < rel_r_uav1_target1 < self.d + self.l
-            and uav_is_charging_copy != 1):
-            surveillance_copy = 1
-        return surveillance_copy
-
-    def dry_cal_age(self, surveillance_copy, age_copy):
-        if surveillance_copy == 0:
-            age_copy = min(1000, age_copy + 1) #changeage
-        else:
-            age_copy = 0
-        return age_copy
+    def dry_cal_surveillance(self, uav1_copy, target1_copy, r_t):
+        if uav1_copy.battery <= 0: # UAV dead
+            target1_copy.surveillance = 0
+        else: # UAV alive
+            if (self.d - self.l < r_t < self.d + self.l
+                and uav1_copy.charging != 1):
+                target1_copy.surveillance = 1
+            else:
+                target1_copy.surveillance = 0
+        return target1_copy.surveillance
 
     def dry_step(self, action, future, discount):
         # Copying relevant instance variables
-        battery_copy = self.battery
-        uav_is_charging_copy = self.uav_is_charging
-        surveillance_copy = self.surveillance
-        age_copy = self.age
+        uav1_copy = self.uav1.copy()
+        target1_copy = self.target1.copy()
         step_count_copy = self.step_count
-        uav1_state_copy = self.uav1_state.copy()
 
         terminal = False
         truncated = False
@@ -393,42 +358,32 @@ class UAV1Target1(Env):
             if truncated:
                 break
             # Logic for UAV1's battery and actions
-            uav_is_charging_copy = 0
-            if battery_copy <= 0:  # UAV dead
-                surveillance_copy = 0
-                # reward += -self.R_fall*discount**i
+            uav1_copy.charging = 0
+            if uav1_copy.battery <= 0:  # UAV dead
+                pass
             else:
                 if action == 0:
                     if (dry_dict_observation['uav1_charge_station'][0] < self.r_c):
-                        uav_is_charging_copy = 1
-                        battery_copy = min(battery_copy + 10, 3000)
+                        uav1_copy.charging = 1
+                        uav1_copy.battery = min(uav1_copy.battery + 10, 3000)
                     else:
-                        battery_copy -= 1
+                        uav1_copy.battery -= 1
                         w1_action = self.toc_get_action(dry_dict_observation['uav1_charge_station'][:2])
-                        uav1_state_copy = self.dry_uav1kinematics(w1_action, uav1_state_copy)
+                        uav1_copy.move(w1_action)
                     
                 else:
-                    battery_copy -= 1
+                    uav1_copy.battery -= 1
                     w1_action = self.dkc_get_action(dry_dict_observation['uav1_target1'][:2])
-                    uav1_state_copy = self.dry_uav1kinematics(w1_action, uav1_state_copy)
-            # Dry observation
-            # relative r, alpha of uav1_target1
-            uav_x, uav_y, theta = uav1_state_copy
-            target_x, target_y = self.target1_state
+                    uav1_copy.move(w1_action)
+            uav_x, uav_y, theta = uav1_copy.state
+            target_x, target_y = target1_copy.state
             x = target_x - uav_x
             y = target_y - uav_y
-            r_t = np.sqrt(x**2 + y**2) #(x**2 + y**2) ** 0.5
+            r_t = np.sqrt(x**2 + y**2)
             beta_t = arctan2(y, x)
             alpha_t = wrap(beta_t - wrap(theta))
-
-            # relative r, alpha of uav1_charge_station == self.observation[:2]
-            r_c = np.sqrt(uav_x**2 + uav_y**2)
-                        # beta                # theta
-            alpha_c = wrap(arctan2(uav_y, uav_x) - wrap(theta) - pi)
-            if battery_copy > 0:
-                surveillance_copy = self.dry_cal_surveillance(uav_is_charging_copy, r_t)
-
-            age_copy = self.dry_cal_age(surveillance_copy, age_copy)
+            self.dry_cal_surveillance(uav1_copy, target1_copy, r_t)
+            target1_copy.cal_age()
 
             step_count_copy += 1
             if step_count_copy >= self.max_step:
@@ -437,28 +392,28 @@ class UAV1Target1(Env):
             dry_dict_observation = { # is this state s_{t+10}?: Yes it is
                 # r, alpha
                 "uav1_target1": np.float32([r_t, alpha_t]),
-                "uav1_charge_station": np.float32([r_c, alpha_c]),
-                "battery":  np.float32(battery_copy),
-                "age": age_copy,
+                "uav1_charge_station": np.float32([uav1_copy.obs[0], uav1_copy.obs[1]]),
+                "battery":  np.float32(uav1_copy.battery),
+                "age": target1_copy.age,
                 # "previous_action": action
             }
-            reward += -age_copy*discount**i
+            reward += -target1_copy.age*discount**i
         return dry_dict_observation, reward, terminal, truncated, {}
 
 
-    def render(self, action, mode="human", control=False):
+    def render(self, action, mode="human"):
         if self.viewer is None:
             self.viewer = rendering.Viewer(1000, 1000)
             bound = int(40 * 1.05)
             self.viewer.set_bounds(-bound, bound, -bound, bound)
 
         # target1
-        target1_x, target1_y = self.target1_state
+        target1_x, target1_y = self.target1.state
         # draw donut
         outer_donut = self.viewer.draw_circle(
             radius=self.d + self.l, x=target1_x, y=target1_y, filled=True
         )
-        if self.surveillance == 1:
+        if self.target1.surveillance == 1:
             outer_donut.set_color(0.6, 0.6, 1.0, 0.3)  # lighter
         else:
             outer_donut.set_color(0.3, 0.3, 0.9, 0.3)  # transparent blue
@@ -482,7 +437,7 @@ class UAV1Target1(Env):
 
         # charge station @ origin
         charge_station = self.viewer.draw_circle(radius=self.r_c, filled=True)
-        if self.uav_is_charging == 1:
+        if self.uav1.charging == 1:
             charge_station.set_color(0.9, 0.1, 0.1)  # red
         else:
             if action == 0:
@@ -491,77 +446,20 @@ class UAV1Target1(Env):
                 charge_station.set_color(0.1, 0.9, 0.1)  # green            
 
         # uav1 (yellow)
-        if self.battery <= 0: # UAV dead
+        if self.uav1.battery <= 0: # UAV dead
             pass
         else:
-            uav1_x, uav1_y, uav1_theta = self.uav1_state
+            uav1_x, uav1_y, uav1_theta = self.uav1.state
             uav1_tf = rendering.Transform(translation=(uav1_x, uav1_y), rotation=uav1_theta)
             uav1_tri = self.viewer.draw_polygon([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)])
             uav1_tri.set_color(1, 1, 1)  # (1,1,0)yellow
             uav1_tri.add_attr(uav1_tf)
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
-        # # draw text
-        # self.print_q_value()
-        # image = self.viewer.render(return_rgb_array=True)
-        # image = Image.fromarray(image)
-        # draw = ImageDraw.Draw(image)
-        # # left upper corner
-        # text0 = f"r_c: {self.observation[0]:.2f}, a_c: {self.observation[1]/np.pi:.2f}π"
-        # text1 = f"r_t: {self.rel_observation[0]:.2f}, a_t: {self.rel_observation[1]/np.pi:.2f}π"
-        # text2 = f"max_Q: {self.max_Q:.2f}"
-        # text3 = f"dQ: {self.max_Q - self.min_Q:.2f}"
-        # text4 = f"argmax(Q0,Q1): {self.argmax_Q}"
-        # text5 = "battery: {}".format(self.battery)
-        # text6 = "age: {}".format(self.age)
-        # text7 = "Reward: {}".format(-self.age)
-        # draw.text((0, 0), text0, color=(200, 200, 200), font=self.font)
-        # draw.text((0, 20), text1, color=(200, 200, 200), font=self.font)
-        # draw.text((0, 40), text2, color=(255, 255, 0), font=self.font)
-        # draw.text((0, 60), text3, color=(200, 200, 200), font=self.font)
-        # draw.text((0, 80), text4, color=(200, 200, 200), font=self.font)
-        # draw.text((0, 100), text5, color=(255, 255, 255), font=self.font)
-        # draw.text((0, 120), text6, color=(255, 255, 255), font=self.font)
-        # draw.text((0, 140), text7, color=(255, 255, 255), font=self.font)   
-        # # Convert the PIL image to a format that OpenCV can display
-        # cv_image = np.array(image)
-        # # Convert RGB to BGR for OpenCV
-        # cv_image = cv_image[:, :, ::-1].copy()
-        # # Display the image
-        # cv2.imshow('Image Window', cv_image)
-        # # Wait for a key event
-        # key = cv2.waitKey(int(not control))
-        # # Process the key event
-        # if key == 0x2c:  # <
-        #     action = 0
-        # elif key == 0x2e:  # >
-        #     action = 1
-        # if control:
-        #     return cv_image, action
-        # else:
-        #     return cv_image
-
-    # relative position
-    @property
-    def observation(self): # of uav relative to charging station
-        x, y = self.uav1_state[:2]
-        r = np.sqrt(x**2 + y**2)
-                    # beta                  # theta
-        alpha = wrap(arctan2(y, x) - wrap(self.uav1_state[-1]) - pi)
-        beta = arctan2(y, x)
-        return array([r, alpha, beta])  # beta
 
     @property
-    def target1_obs(self): # absolute position of target
-        x, y = self.target1_state[:2]
-        r = np.sqrt(x**2 + y**2)
-        beta = arctan2(y, x)
-        return array([r, beta])  # beta
-
-    # absolute position
-    @property
-    def rel_observation(self): # of target
-        uav_x, uav_y, theta = self.uav1_state
-        target_x, target_y = self.target1_state
+    def rel_observation(self): # of target relative to uav
+        uav_x, uav_y, theta = self.uav1.state
+        target_x, target_y = self.target1.state
         x = target_x - uav_x
         y = target_y - uav_y
         r = np.sqrt(x**2 + y**2)
@@ -570,21 +468,16 @@ class UAV1Target1(Env):
         return array([r, alpha, beta])
 
     def cal_surveillance(self):
-        # is any uav surveilling target 1?
-        if (
-            self.d - self.l < self.rel_observation[0] < self.d + self.l
-            # and action[0] != 0 # intent is not charging
-            and self.uav_is_charging != 1 # uav 1 is not charging(on the way to charge is ok)
-        ):
-            self.surveillance = 1 # uav1 is surveilling target 1
-        else:
-            self.surveillance = 0
-
-    def cal_age(self):
-        if self.surveillance == 0: # uav1 is not surveilling
-            self.age = min(1000, self.age + 1) #changeage
-        else:
-            self.age = 0
+        if self.uav1.battery <= 0:
+            self.target1.surveillance = 0
+        else: # UAV alive
+            if (
+                self.d - self.l < self.rel_observation[0] < self.d + self.l
+                and self.uav1.charging != 1 # uav 1 is not charging(on the way to charge is ok)
+            ):
+                self.target1.surveillance = 1 # uav1 is surveilling target 1
+            else:
+                self.target1.surveillance = 0
 
     @property
     def dict_observation(self):
@@ -594,10 +487,9 @@ class UAV1Target1(Env):
                 [self.rel_observation[0],
                 self.rel_observation[1]]
                 ),
-            "uav1_charge_station": np.float32([self.observation[0], self.observation[1]]),
-            "battery":  np.float32(self.battery),
-            "age": self.age,
-            # "previous_action": self.previous_action
+            "uav1_charge_station": np.float32([self.uav1.obs[0], self.uav1.obs[1]]),
+            "battery":  np.float32(self.uav1.battery),
+            "age": self.target1.age,
         }
         return dictionary_obs
     
@@ -627,17 +519,6 @@ class UAV1Target1(Env):
         # print(f'argmax_Q: {self.argmax_Q}', end=' | ')
         # print(f'maxQ - Q: {self.max_Q - self.min_Q:.0f}', end=' | ')
         # print(f'Q0: {self.Q0:.2f}, Q1: {self.Q1:.2f}')
-
-def wrap(theta):
-    if theta > pi:
-        theta -= 2 * pi
-    elif theta < -pi:
-        theta += 2 * pi
-    return theta
-
-
-def L1(x):
-    return sum(abs(x))
 
 
 if __name__ == "__main__":
@@ -696,49 +577,6 @@ if __name__ == "__main__":
         avg_reward += total_reward
     avg_reward /= repitition
     print(f'average reward: {avg_reward}')
-
-    # testing env: reset and control
-    '''    # r_t, a_t, r_c, a_c, battery, age    
-    state=[0, 0, 0, 0, 3000, 0]
-    uav_x = state[2] * np.cos(state[3] + np.pi) # r_c*cos(beta_c=(alpha + pi))
-    uav_y = state[2] * np.sin(state[3] + np.pi) # r_c*sin(beta_c=(alpha + pi))
-    uav_theta = 0
-    uav1_pose = np.array( # r_c, alpha_c, r_t, alpha_t -> x, y, beta
-        [
-            uav_x,
-            uav_y,
-            uav_theta
-        ],
-        dtype=np.float32,
-    )
-    # r_t, alpha_t -> target_x, target_y
-    target_beta = uav_theta + state[1] # target_alpha
-    target_x = state[0] * np.cos(target_beta) # r_t*cos(beta_t)
-    target_y = state[0] * np.sin(target_beta) # r_t*sin(beta_t)
-    target1_pose = np.array([uav_x + target_x, uav_y + target_y], dtype=np.float32)
-
-    step = 0
-    truncated = False
-    obs, _ = uav_env.reset(
-                uav1_pose=uav1_pose.copy(),
-                target1_pose=target1_pose.copy(),
-                battery=state[4],
-                age=state[5],
-            )
-    _, action = uav_env.render(action=0, mode='rgb_array', control=True)
-    total_reward = 0
-    while truncated == False:
-        try:
-            step += 1
-            obs, reward, _, truncated, _ = uav_env.step(action)
-            total_reward += reward
-            # uav_env.print_q_value()
-            _, action = uav_env.render(action, mode='rgb_array', control=True)
-        except KeyboardInterrupt:
-            print("\nExiting gracefully...")
-            break
-    print(f'total reward: {total_reward}')
-    cv2.destroyAllWindows()'''
     
     # testing env: alternating action
     '''obs, _ = uav_env.reset()
