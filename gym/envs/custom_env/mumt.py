@@ -226,7 +226,6 @@ class MUMT(Env):
         for i in range(self.m):
             self.uavs.append(self.UAV(state=uav_states[i], battery=batteries[i]))
 
-
         if target_pose is None:
             target1_r = np.random.uniform(20, 35, self.n)  # 0~ D-d
             target1_beta = np.random.uniform(-np.pi, np.pi, self.n)
@@ -315,7 +314,6 @@ class MUMT(Env):
                 return 1 # uav1 is surveilling target 1
             else:
                 return 0
-
 
     def step(self, action):
         terminal = False
