@@ -8,7 +8,7 @@ import numpy as np
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete
 from typing import Optional
-# import rendering
+import rendering
 
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
@@ -449,7 +449,7 @@ class UAV1Target1(Env):
     def render(self, action, mode="human", control=False):
         if self.viewer is None:
             self.viewer = rendering.Viewer(1000, 1000)
-            bound = int(40 * 1.05)
+            bound = int(60 * 1.05)
             self.viewer.set_bounds(-bound, bound, -bound, bound)
 
         # target1

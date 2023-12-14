@@ -8,7 +8,7 @@ import numpy as np
 from gym import Env
 from gym.spaces import Box, Dict, Discrete # MultiBinary, MultiDiscrete
 from typing import Optional
-# import rendering
+import rendering
 
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
@@ -178,7 +178,7 @@ class UAV1Target1_v2(Env):
         self,
         uav_pose=None,
         target_pose=None,
-        battery=3000,
+        battery=None,
         age=0,
         seed: Optional[int] = None,
         options: Optional[dict] = None,
@@ -207,10 +207,14 @@ class UAV1Target1_v2(Env):
             )
         else:
             uav_state = uav_pose
+        if battery is None:
+            battery = np.random.randint(1500, 3000)
+        else:
+            battery = battery
         self.uav1 = self.UAV(state=uav_state, battery=battery)
 
         if target_pose is None:
-            target1_r = np.random.uniform(0, 30)  # 0~ D-d
+            target1_r = np.random.uniform(20, 35)  # 0~ D-d
             target1_beta = np.random.uniform(-pi, pi)
             target_state = array((target1_r * cos(target1_beta), target1_r * sin(target1_beta)))
         else:
@@ -530,7 +534,7 @@ if __name__ == "__main__":
     print(state0)
     print(state)'''
     
-    uav_env = UAV1Target1()
+    uav_env = UAV1Target1_v2()
     # action_sample = uav_env.action_space.sample()
     # print("action_sample: ", action_sample)
 

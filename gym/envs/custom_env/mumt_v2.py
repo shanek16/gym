@@ -152,7 +152,7 @@ class MUMT_v2(Env):
         self.num2str = {0: "charge", 1: "target_1"}
         self.max_step = max_step
         self.viewer = None
-        self.SAVE_FRAMES_PATH = "../../../../visualized/2U2T" # example. save frames path is set at surveillance_PPO.py
+        self.SAVE_FRAMES_PATH = "../../../../visualized/MUMT" # example. save frames path is set at surveillance_PPO.py
         self.episode_counter = 0
         self.frame_counter = 0
         self.save_frames = False

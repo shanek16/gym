@@ -1,9 +1,7 @@
 import os
 import sys
-current_file_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_file_path)
-# desired_path = os.path.expanduser("~/Project/PERSISTENT/Gymnasium")
-# sys.path.append(desired_path)
+# current_file_path = os.path.dirname(os.path.abspath(__file__))
+# sys.path.append(current_file_path)
 desired_path = os.path.expanduser("~/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/gym")
 sys.path.append(desired_path)
 import numpy as np
@@ -67,7 +65,7 @@ class MUMT(Env):
                         # beta                  # theta
             alpha = wrap(arctan2(y, x) - wrap(self.state[-1]) - pi)
             beta = arctan2(y, x)
-            return array([r, alpha, beta], dtype=np.float32)  # beta
+            return array([r, alpha, beta])  # beta
 
     class Target:
         def __init__(
@@ -93,11 +91,10 @@ class MUMT(Env):
             x, y = self.state
             r = np.sqrt(x**2 + y**2)
             beta = arctan2(y, x)
-            return array([r, beta], dtype=np.float32)  # beta
+            return array([r, beta])  # beta
 
     def __init__(
         self,
-        render_mode: Optional[str] = None,
         r_max=80,
         r_min=0,
         dt=0.05,
@@ -110,7 +107,6 @@ class MUMT(Env):
         seed = None # one circle 1200 time steps
     ):
         super().__init__()
-        self.render_mode = render_mode
         self.seed = seed
         # Create the observation space
         obs_space = {}
@@ -160,7 +156,7 @@ class MUMT(Env):
         self.episode_counter = 0
         self.frame_counter = 0
         self.save_frames = False
-        # self.q_init()
+        self.q_init()
 
         # initialization for Dynamic Programming
         self.n_r = 800
@@ -259,7 +255,7 @@ class MUMT(Env):
         self.battery_space = np.concatenate([np.arange(0, 500, 100), np.arange(500, 3100, 500)])
 
         self.age_space = np.arange(0, 1001, 100) #changeage
-        self.UAV1Target1_result00 = np.load(current_file_path + f"/1U1T_s6_age1000:100_gamma_{self.discount}_dt_{self.dt}_{'val'}_iter.npz")
+        self.UAV1Target1_result00 = np.load(f"/home/shane16/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/RESULTS/1U1T_s6_age1000:100_gamma_{self.discount}_dt_{self.dt}_{'val'}_iter.npz")
         self.UAV1Target1_straightened_policy00 = self.UAV1Target1_result00["policy"]
         self.UAV1Target1_values00 = self.UAV1Target1_result00["values"]
         # print('shape of UAV1Target1_straightened_policy00: ', np.shape(self.UAV1Target1_straightened_policy00))
@@ -324,12 +320,11 @@ class MUMT(Env):
         truncated = False
         action = np.squeeze(action)
         reward = 0
-        # TODO: if action is a 0-d array, convert to 1d array
         if action.ndim == 0:
             action = np.expand_dims(action, axis=0)
         for uav_idx, uav_action in enumerate(action):
             self.control_uav(uav_idx, uav_action)
-
+        
         surveillance_matrix = np.zeros((self.m, self.n))
         for uav_idx in range(self.m):
             for target_idx in range(self.n):
@@ -339,6 +334,7 @@ class MUMT(Env):
             self.targets[target_idx].surveillance = surveillance[target_idx]
             self.targets[target_idx].cal_age()
             reward += -self.targets[target_idx].age
+        reward = reward / self.n
         if self.save_frames and int(self.step_count) % 6 == 0:
             image = self.render(action, mode="rgb_array")
             path = os.path.join(
@@ -431,8 +427,8 @@ class MUMT(Env):
 
             dry_dict_observation = { # is this state s_{t+10}?: Yes it is
                 # r, alpha
-                "uav1_target1": np.array([r_t, alpha_t], dtype=np.float32,),
-                "uav1_charge_station": np.array([uav1_copy.obs[0], uav1_copy.obs[1]], dtype=np.float32,),
+                "uav1_target1": np.float32([r_t, alpha_t]),
+                "uav1_charge_station": np.float32([uav1_copy.obs[0], uav1_copy.obs[1]]),
                 "battery":  np.float32(uav1_copy.battery),
                 "age": target1_copy.age,
                 # "previous_action": action
@@ -516,7 +512,7 @@ class MUMT(Env):
         r = np.sqrt(x**2 + y**2)
         beta = arctan2(y, x)
         alpha = wrap(beta - wrap(theta))
-        return array([r, alpha, beta],dtype=np.float32)
+        return array([r, alpha, beta])
 
     @property
     def dict_observation(self):
@@ -574,9 +570,8 @@ if __name__ == "__main__":
     state, reward, _, _, _ = env.step(action=0)
     print(state0)
     print(state)'''
-    m=2
-    n=1
-    uav_env = MUMT(m=m, n=n)
+    
+    uav_env = MUMT(m=10, n=6)
 
     # Number of features
     state_sample = uav_env.observation_space.sample()
@@ -587,7 +582,7 @@ if __name__ == "__main__":
     print('uav_env.action_space.n: ', uav_env.action_space)
         
     # testing env: alternating action
-    '''obs, _ = uav_env.reset()
+    obs, _ = uav_env.reset()
     step = 0
     while step < 5000:
         step += 1
@@ -596,10 +591,10 @@ if __name__ == "__main__":
         obs, reward, _, truncated, _ = uav_env.step(action_sample)
         bat = obs['battery']
         print(f'step: {step} | battery: {bat} | reward: {reward}')
-        uav_env.render(action_sample)'''
+        uav_env.render(action_sample)
     
     # testing env: heuristic policy
-    repitition = 10
+    '''repitition = 10
     avg_reward = 0
     for i in range(repitition):
         step = 0
@@ -610,13 +605,7 @@ if __name__ == "__main__":
         total_reward = 0
         while truncated == False:
             step += 1
-            action = np.arange(1, m + 1)
-            action = np.where(action > n, 0, action)
-            print(obs) # {'uav1_target1': array([36.854134 , -1.4976969], dtype=float32), 'uav2_target1': array([37.672398 ,  3.0869958], dtype=float32), 'uav1_charge_station': array([21.95254  , -2.0162203], dtype=float32), 'uav2_charge_station': array([28.607574 ,  2.5069222], dtype=float32), 'battery': array([2099., 2594.], dtype=float32), 'age': array([0.], dtype=float32)}
-            # print each observation
-            for key, value in obs.items():
-                print(f'{key}: {value}')
-            input()
+            r_c = obs['uav1_charge_station'][0]
             if bat > 2000:
                 action = 1
             elif bat > 1000:
@@ -640,4 +629,4 @@ if __name__ == "__main__":
         print(f'{i}: {total_reward}')   
         avg_reward += total_reward
     avg_reward /= repitition
-    print(f'average reward: {avg_reward}')
+    print(f'average reward: {avg_reward}')'''
