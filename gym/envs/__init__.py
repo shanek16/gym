@@ -409,11 +409,11 @@ register(
 register(
     id="DKC_Unicycle",
     entry_point="gym.envs.custom_env.dkc_unicycle:DKC_Unicycle",
-    max_episode_steps=2000,
+    max_episode_steps=2000, #80/75*3600*50*1.5,
 )
 
 register(
     id="TOC_Unicycle",
     entry_point="gym.envs.custom_env.toc_unicycle:TOC_Unicycle",
-    max_episode_steps=2000,
+    max_episode_steps=2000, #80/75*3600*50*1.5,
 )

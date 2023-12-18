@@ -11,11 +11,12 @@ import random
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiDiscrete
 from typing import Optional
-# import rendering
+import rendering
 
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
+from heuristic import r_t_hungarian, high_age_first
 
 def wrap(theta):
     if theta > pi:
@@ -588,20 +589,20 @@ if __name__ == "__main__":
     state, reward, _, _, _ = env.step(action=0)
     print(state0)
     print(state)'''
-    m=2
-    n=4
+    m=4
+    n=2
     uav_env = MUMT(m=m, n=n)
 
     # Number of features
     state_sample = uav_env.observation_space.sample()
     action_sample = uav_env.action_space.sample()
-    print("state_sample: ", state_sample)
-    print("action_sample: ", action_sample)
-    print('uav_env.observation_space:', uav_env.observation_space)
-    print('uav_env.action_space.n: ', uav_env.action_space)
+    # print("state_sample: ", state_sample)
+    # print("action_sample: ", action_sample)
+    # print('uav_env.observation_space:', uav_env.observation_space)
+    # print('uav_env.action_space.n: ', uav_env.action_space)
         
     # testing env: alternating action
-    # target1_r = np.random.uniform(20, 35, self.n)  # 0~ D-d
+    '''# target1_r = np.random.uniform(20, 35, self.n)  # 0~ D-d
     # target1_beta = np.random.uniform(-np.pi, np.pi, self.n)
     target_states = np.array([np.array([0, 24]), np.array([30, 20])]).T
     ages = [100] * n
@@ -617,48 +618,30 @@ if __name__ == "__main__":
         obs, reward, _, truncated, _ = uav_env.step(action_sample)
         bat = obs['battery']
         print(f'step: {step} | battery: {bat} | reward: {reward}')
-        uav_env.render(action_sample)
+        uav_env.render(action_sample)'''
     
-    # testing env: heuristic policy
-    '''repitition = 10
+    # Heuristic policy
+    repitition = 10
     avg_reward = 0
     for i in range(repitition):
         step = 0
         truncated = False
         obs, _ = uav_env.reset(seed=i)
-        bat = obs['battery']
-        age = obs['age']
         total_reward = 0
         while truncated == False:
             step += 1
-            action = np.arange(1, m + 1)
-            action = np.where(action > n, 0, action)
-            print(obs) # {'uav1_target1': array([36.854134 , -1.4976969], dtype=float32), 'uav2_target1': array([37.672398 ,  3.0869958], dtype=float32), 'uav1_charge_station': array([21.95254  , -2.0162203], dtype=float32), 'uav2_charge_station': array([28.607574 ,  2.5069222], dtype=float32), 'battery': array([2099., 2594.], dtype=float32), 'age': array([0.], dtype=float32)}
-            # print each observation
-            for key, value in obs.items():
-                print(f'{key}: {value}')
-            input()
-            if bat > 2000:
-                action = 1
-            elif bat > 1000:
-                # previous_action = obs['previous_action']
-                if age == 0 or age > 800: # uav was surveilling
-                # if previous_action:
-                    action = 1
-                else: # uav was charging
-                    action = 0
-            else:
-                action = 0
-            
+            # action = r_t_hungarian(obs, m, n)
+            action = high_age_first(obs, m)
+            # action = np.arange(1, m + 1)
+            # action = np.where(action > n, 0, action)
             obs, reward, _, truncated, _ = uav_env.step(action)
             total_reward += reward
             bat = obs['battery']
             age = obs['age']
-            # print(f'step: {step} | battery: {bat} | reward: {reward}') #, end=' |')
+            print(f'step: {step} | battery: {bat} | reward: {reward}') #, end=' |')
             # print(f'action: {action}')#, end=' |')
-            # uav_env.print_q_value()
-            # uav_env.render(action, mode='rgb_array')
+            uav_env.render(action, mode='rgb_array')
         print(f'{i}: {total_reward}')   
         avg_reward += total_reward
     avg_reward /= repitition
-    print(f'average reward: {avg_reward}')'''
+    print(f'average reward: {avg_reward}')

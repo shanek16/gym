@@ -1,5 +1,7 @@
 import os
 import sys
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_file_path)
 desired_path = os.path.expanduser("~/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/gym")
 sys.path.append(desired_path)
 import warnings
@@ -8,7 +10,7 @@ from gym import Env
 from gym.spaces import Box
 from gym.utils import seeding
 from numpy import arctan2, array, cos, pi, sin
-# import rendering
+import rendering
 
 warnings.filterwarnings("ignore")
 
@@ -18,7 +20,7 @@ class DKC_Unicycle(Env):
 
     def __init__(
         self,
-        r_max=40,
+        r_max=80,
         r_min=0.0,
         sigma=0.0,
         dt=0.05,
@@ -122,7 +124,6 @@ class DKC_Unicycle(Env):
         x, y = self.state[:2] #+ self.sigma * self.np_random.randn(2)  # self.sigma=0 anyways
         r = (x**2 + y**2) ** 0.5
         alpha = wrap(arctan2(y, x) - wrap(self.state[-1]) - pi)
-        # print("r: ", r)
         return array([r, alpha])
 
     def close(self):
