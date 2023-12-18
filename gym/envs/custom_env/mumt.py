@@ -11,7 +11,7 @@ import random
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiDiscrete
 from typing import Optional
-import rendering
+# import rendering
 
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
@@ -236,7 +236,7 @@ class MUMT(Env):
             target_states = np.array([target1_r * np.cos(target1_beta), target1_r * np.sin(target1_beta)]).T
             ages = [0] * self.n
         else:
-            target_states = target_pose  # Assuming target_pose is an iterable of target states
+            target_states, ages = target_pose  # Assuming target_pose is an iterable of target states
         # Create Target instances
         for i in range(self.n):
             self.targets.append(self.Target(state=target_states[i], age=ages[i]))
@@ -339,6 +339,7 @@ class MUMT(Env):
             self.targets[target_idx].surveillance = surveillance[target_idx]
             self.targets[target_idx].cal_age()
             reward += -self.targets[target_idx].age
+        reward = reward / self.n # average reward of all targets
         if self.save_frames and int(self.step_count) % 6 == 0:
             image = self.render(action, mode="rgb_array")
             path = os.path.join(
@@ -394,6 +395,9 @@ class MUMT(Env):
         dry_dict_observation['uav1_target1'] = self.rel_observation(uav_idx, target_idx)[:2]
         dry_dict_observation['uav1_charge_station'] = uav1_copy.obs[:2]
         dry_dict_observation = self.dict_observation.copy()
+        # print('Before:')
+        # print('uav1_target1: ', dry_dict_observation['uav1_target1'])
+        # print('uav1_charge_station: ', dry_dict_observation['uav1_charge_station'])
         for i in range(future):
             if truncated:
                 break
@@ -497,14 +501,24 @@ class MUMT(Env):
             uav_x, uav_y, uav_theta = uav.state
             uav_transform = rendering.Transform(translation=(uav_x, uav_y), rotation=uav_theta)
             uav_tri = self.viewer.draw_polygon([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)])
-            try:
-                uav_tri.set_color(*self.uav_color[uav_idx])
-                uav_tri.add_attr(uav_transform)
-            except:
-                print('len(self.uav_color): ',len(self.uav_color))
-                print('uav_idx: ', uav_idx)
-                input()
-
+            # try:
+            uav_tri.set_color(*self.uav_color[uav_idx])
+            uav_tri.add_attr(uav_transform)
+            # except:
+            #     print('len(self.uav_color): ',len(self.uav_color))
+            #     print('uav_idx: ', uav_idx)
+            #     input()
+        # image = self.viewer.render(return_rgb_array=True)
+        # image = Image.fromarray(image)
+        # draw = ImageDraw.Draw(image)
+        # # left upper corner
+        # text0 = f"action: {action}"
+        # # convert to %
+        # text1 = f"battery: {self.dict_observation['battery']/3000}%"
+        # text2 = "age: {}".format(self.dict_observation['age'])
+        # draw.text((0, 0), text0, color=(200, 200, 200), font=self.font)
+        # draw.text((0, 35), text1, color=(200, 200, 200), font=self.font)
+        # draw.text((0, 70), text2, color=(255, 255, 0), font=self.font)
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
 
     # @property
@@ -575,7 +589,7 @@ if __name__ == "__main__":
     print(state0)
     print(state)'''
     m=2
-    n=1
+    n=4
     uav_env = MUMT(m=m, n=n)
 
     # Number of features
@@ -587,7 +601,14 @@ if __name__ == "__main__":
     print('uav_env.action_space.n: ', uav_env.action_space)
         
     # testing env: alternating action
-    '''obs, _ = uav_env.reset()
+    # target1_r = np.random.uniform(20, 35, self.n)  # 0~ D-d
+    # target1_beta = np.random.uniform(-np.pi, np.pi, self.n)
+    target_states = np.array([np.array([0, 24]), np.array([30, 20])]).T
+    ages = [100] * n
+    batteries = np.array([3000, 1000])
+
+    # obs, _ = uav_env.reset(target_pose=(target_states, ages), batteries=batteries)
+    obs, _ = uav_env.reset()
     step = 0
     while step < 5000:
         step += 1
@@ -596,10 +617,10 @@ if __name__ == "__main__":
         obs, reward, _, truncated, _ = uav_env.step(action_sample)
         bat = obs['battery']
         print(f'step: {step} | battery: {bat} | reward: {reward}')
-        uav_env.render(action_sample)'''
+        uav_env.render(action_sample)
     
     # testing env: heuristic policy
-    repitition = 10
+    '''repitition = 10
     avg_reward = 0
     for i in range(repitition):
         step = 0
@@ -640,4 +661,4 @@ if __name__ == "__main__":
         print(f'{i}: {total_reward}')   
         avg_reward += total_reward
     avg_reward /= repitition
-    print(f'average reward: {avg_reward}')
+    print(f'average reward: {avg_reward}')'''
