@@ -134,8 +134,8 @@ class Viewer(object):
         self.onetime_label.append(label)    
 
     def render(self, return_rgb_array=False):
-        # glClearColor(1, 1, 1, 1) # clear color white
-        self.window.clear()
+        glClearColor(1, 1, 1, 1) # clear color white
+        # self.window.clear()
         self.window.switch_to()
         self.window.dispatch_events()
         self.transform.enable()

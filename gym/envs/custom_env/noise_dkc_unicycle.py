@@ -9,6 +9,7 @@ import numpy as np
 from gym import Env
 from gym.spaces import Box
 from gym.utils import seeding
+from typing import Optional
 from numpy import arctan2, array, cos, pi, sin
 import rendering
 
@@ -17,10 +18,30 @@ warnings.filterwarnings("ignore")
 class DKC_Unicycle(Env):
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
 
+    class Target:
+        def __init__(self, 
+                    dt=0.05,
+                    state=array([0.0,0.0]), 
+                    motion_type='static', 
+                    sigma_rayleigh=0.5
+                    ):
+            self.state = state
+            self.dt = dt
+            self.motion_type = motion_type
+            self.sigma_rayleigh = sigma_rayleigh
+
+        def update_position(self):
+            if self.motion_type == 'rayleigh':
+                speed = np.random.rayleigh(self.sigma_rayleigh)
+                angle = np.random.uniform(0, 2*np.pi)
+                dx = speed * np.cos(angle) * self.dt
+                dy = speed * np.sin(angle) * self.dt
+                self.state += np.array([dx, dy])
+
     def __init__(
         self,
         r_max=80,
-        r_min=1.0,
+        r_min=0.1,
         sigma=0.0,
         dt=0.05,
         v=1.0,
@@ -72,7 +93,12 @@ class DKC_Unicycle(Env):
 
         return omegaRef
 
-    def reset(self, pose=None):
+    def reset(self,
+            pose=None, 
+            target_type = 'static', 
+            sigma_rayleigh=0.5, 
+            seed: Optional[int] = None
+            ):
         self.step_count = 0
         if pose is None:
             r = self.np_random.uniform(
@@ -85,11 +111,13 @@ class DKC_Unicycle(Env):
             )
         else:
             self.state = pose
+        self.target1 = self.Target(motion_type=target_type, sigma_rayleigh=sigma_rayleigh)
         return self.observation
 
     def step(self, action):
         terminal = False
         truncated = False
+        self.target1.update_position()
         # clipping action
         if action > self.omega_max:
             action = self.omega_max
@@ -125,10 +153,11 @@ class DKC_Unicycle(Env):
             bound = self.observation_space.high[0] * 1.05
             self.viewer.set_bounds(-bound, bound, -bound, bound)
         x, y, theta = self.state
-        target = self.viewer.draw_circle(radius=self.r_min, filled=True)
-        target.set_color(1, 0, 0)
-        circle = self.viewer.draw_circle(radius=self.d, filled=False)
-        circle.set_color(1,1,1)
+        target1_x, target1_y = self.target1.state
+        target = self.viewer.draw_circle(radius=self.r_min, x=target1_x, y=target1_y, filled=True)
+        target.set_color(1, 0.6, 0)
+        # circle = self.viewer.draw_circle(radius=self.d, x=target1_x, y=target1_y, filled=False)
+        # circle.set_color(1,1,1)
         tf = rendering.Transform(translation=(x, y), rotation=theta)
         tri = self.viewer.draw_polygon([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)])
         tri.set_color(0.5, 0.5, 0.9)
@@ -137,7 +166,10 @@ class DKC_Unicycle(Env):
 
     @property
     def observation(self):
-        x, y = self.state[:2] #+ self.sigma * self.np_random.randn(2)  # self.sigma=0 anyways
+        uav_x, uav_y = self.state[:2] #+ self.sigma * self.np_random.randn(2)  # self.sigma=0 anyways
+        target_x, target_y = self.target1.state
+        x = uav_x - target_x
+        y = uav_y - target_y
         r = (x**2 + y**2) ** 0.5
         alpha = wrap(arctan2(y, x) - wrap(self.state[-1]) - pi)
         return array([r, alpha])
@@ -167,7 +199,7 @@ if __name__ == '__main__':
     print('uav_env.observation_space:', uav_env.observation_space)
 
     step = 0
-    obs = uav_env.reset()
+    obs = uav_env.reset(target_type='rayleigh', sigma_rayleigh=0.5)
     r = obs[0]
     alpha = obs[1]
     while step < 5000:
