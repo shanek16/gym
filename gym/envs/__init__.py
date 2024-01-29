@@ -417,3 +417,15 @@ register(
     entry_point="gym.envs.custom_env.toc_unicycle:TOC_Unicycle",
     max_episode_steps=2000, #80/75*3600*50*1.5,
 )
+
+register(
+    id="Noise_DKC_Unicycle",
+    entry_point="gym.envs.custom_env.noise_dkc_unicycle:Noise_DKC_Unicycle",
+    max_episode_steps=4000, #80/75*3600*50*1.5,
+)
+
+register(
+    id="Noise_TOC_Unicycle",
+    entry_point="gym.envs.custom_env.noise_toc_unicycle:Noise_TOC_Unicycle",
+    max_episode_steps=4000, #80/75*3600*50*1.5,
+)

@@ -8,14 +8,14 @@ import warnings
 import numpy as np
 from gym import Env
 from gym.spaces import Box
-from gym.utils import seeding
-from typing import Optional
+from gym.utils import seeding  
+# from typing import Optional
 from numpy import arctan2, array, cos, pi, sin
 import rendering
 
 warnings.filterwarnings("ignore")
 
-class DKC_Unicycle(Env):
+class Noise_DKC_Unicycle(Env):
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
 
     class Target:
@@ -23,25 +23,50 @@ class DKC_Unicycle(Env):
                     dt=0.05,
                     state=array([0.0,0.0]), 
                     motion_type='static', 
-                    sigma_rayleigh=0.5
+                    sigma_rayleigh=0.5,
+                    np_random = None
                     ):
             self.state = state
             self.dt = dt
             self.motion_type = motion_type
             self.sigma_rayleigh = sigma_rayleigh
+            self.target_speed = sigma_rayleigh*np.sqrt(2/pi)
+            self.np_random = np_random if np_random is not None else np.random
+            self.time_elapsed = 0
 
         def update_position(self):
             if self.motion_type == 'rayleigh':
-                speed = np.random.rayleigh(self.sigma_rayleigh)
-                angle = np.random.uniform(0, 2*np.pi)
+                speed = self.np_random.rayleigh(self.sigma_rayleigh)
+                angle = self.np_random.uniform(0, 2*np.pi)
                 dx = speed * np.cos(angle) * self.dt
                 dy = speed * np.sin(angle) * self.dt
                 self.state += np.array([dx, dy])
+            elif self.motion_type == 'deterministic':
+                # Define theta_T based on the current time_elapsed
+                if 0 <= self.time_elapsed < 10:
+                    theta_T = np.cos(pi * self.time_elapsed / 10)
+                elif 10 <= self.time_elapsed < 25:
+                    theta_T = -pi / 4
+                elif 25 <= self.time_elapsed < 55:
+                    theta_T = pi / 4
+                elif 55 <= self.time_elapsed < 100:
+                    theta_T = np.cos(pi * self.time_elapsed / 5) - pi / 8
+                else:
+                    theta_T = np.cos((pi / 10 - 0.005 * (self.time_elapsed - 100)) * self.time_elapsed)
+
+                # Update position based on theta_T
+                dx = self.target_speed*np.cos(theta_T) * self.dt
+                dy = self.target_speed*np.sin(theta_T) * self.dt
+                self.state += np.array([dx, dy])
+
+            # Update the time elapsed
+            self.time_elapsed += self.dt
 
     def __init__(
         self,
+        seed=None,
         r_max=80,
-        r_min=0.1,
+        r_min=0.5,
         sigma=0.0,
         dt=0.05,
         v=1.0,
@@ -49,7 +74,7 @@ class DKC_Unicycle(Env):
         d_min=4.5,
         k1=0.0181,
         k2 = 1.0180,
-        max_step=2000, # is max_step=2000 sufficient for the uav(r=75) to reach the target? -> Yes it is. it takes less than 1800 steps.
+        max_step=4000, # is max_step=2000 sufficient for the uav(r=75) to reach the target? -> Yes it is. it takes less than 1800 steps.
     ):  # 0.07273
         self.viewer = None
         self.observation_space = Box(
@@ -71,14 +96,16 @@ class DKC_Unicycle(Env):
         self.max_step = max_step
         self.step_count = None
         self.state = None
-        self.seed()
+        self.seed(seed)
         self.tol = 1e-12
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
     
-    def controller(self, r, rdot, direction):
+    def controller(self, r, alpha):
+        rdot = -self.v * np.cos(alpha)
+        direction = np.sign(alpha)
         if r == 0:
             uNav = self.omega_max
         else:
@@ -97,7 +124,6 @@ class DKC_Unicycle(Env):
             pose=None, 
             target_type = 'static', 
             sigma_rayleigh=0.5, 
-            seed: Optional[int] = None
             ):
         self.step_count = 0
         if pose is None:
@@ -111,7 +137,7 @@ class DKC_Unicycle(Env):
             )
         else:
             self.state = pose
-        self.target1 = self.Target(motion_type=target_type, sigma_rayleigh=sigma_rayleigh)
+        self.target1 = self.Target(state=array([0.0,0.0]), motion_type=target_type, sigma_rayleigh=sigma_rayleigh, np_random=self.np_random)
         return self.observation
 
     def step(self, action):
@@ -188,7 +214,7 @@ def wrap(theta):
     return theta
 
 if __name__ == '__main__':
-    uav_env = DKC_Unicycle()
+    uav_env = Noise_DKC_Unicycle()
     action_sample = uav_env.action_space.sample()
     print("action_sample: ", action_sample)
 
@@ -199,16 +225,21 @@ if __name__ == '__main__':
     print('uav_env.observation_space:', uav_env.observation_space)
 
     step = 0
-    obs = uav_env.reset(target_type='rayleigh', sigma_rayleigh=0.5)
+    # target_type = 'static'
+    # target_type = 'rayleigh'
+    target_type = 'deterministic'
+    obs = uav_env.reset(target_type=target_type, sigma_rayleigh=0.5)
     r = obs[0]
     alpha = obs[1]
-    while step < 5000:
+    terminal = False
+    truncated = False
+    while not terminal or truncated:
         step += 1
-        action_sample = uav_env.controller(r, -uav_env.v * np.cos(alpha), np.sign(alpha))
+        action_sample = uav_env.controller(r, alpha)
         # print(action_sample)
         # action_sample = uav_env.action_space.sample()
         # uav_env.step(action_sample[0])
-        obs, _, _, _, _ = uav_env.step(action_sample)
+        obs, reward, terminal, truncated, _ = uav_env.step(action_sample)
         r = obs[0]
         alpha = obs[1]
         uav_env.render(action_sample)

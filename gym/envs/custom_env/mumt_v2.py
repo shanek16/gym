@@ -333,6 +333,7 @@ class MUMT_v2(Env):
             self.targets[target_idx].surveillance = surveillance[target_idx]
             self.targets[target_idx].cal_age()
             reward += -self.targets[target_idx].age
+        reward = reward / self.n # average reward of all targets
         if self.save_frames and int(self.step_count) % 6 == 0:
             image = self.render(action, mode="rgb_array")
             path = os.path.join(

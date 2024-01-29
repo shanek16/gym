@@ -17,6 +17,8 @@ from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
 from heuristic import r_t_hungarian, high_age_first
+from matplotlib import pyplot as plt
+# from matplotlib.transforms import Affine2D
 
 def wrap(theta):
     if theta > pi:
@@ -144,6 +146,7 @@ class MUMT(Env):
         self.action_space = MultiDiscrete([n + 1] * m, seed=self.seed)
         self.dt = dt
         self.discount = 0.999
+        self.r_max = r_max
         self.d = d  # target distance
         self.l = l  # coverage gap: coverage: d-l ~ d+l # noqa
         self.m = m  # of uavs
@@ -190,6 +193,7 @@ class MUMT(Env):
                 (-1, 1)
             )
         )
+        self.trajectory_data = [[] for _ in range(self.m)]
 
     def reset(
         self,
@@ -202,7 +206,9 @@ class MUMT(Env):
     ):
         self.uavs = []
         self.targets = []
+        self.trajectory_data = [[] for _ in range(self.m)]
         np.random.seed(seed)
+        self.seed = seed
         self.episode_counter += 1
         self.step_count = 0
         if self.save_frames:
@@ -230,6 +236,13 @@ class MUMT(Env):
         # Create UAV instances
         for i in range(self.m):
             self.uavs.append(self.UAV(state=uav_states[i], battery=batteries[i]))
+        for uav_idx, uav in enumerate(self.uavs):  # Replace 'self.uavs' with how you access your UAVs
+            uav_x, uav_y, uav_theta = uav.state  # Replace with actual position attributes
+            uav_battery_level = uav.battery  # Replace with actual battery attribute
+            # self.trajectory_data.append((uav_x, uav_y, uav_battery_level, uav_theta))
+            self.trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
+
+
 
         if target_pose is None:
             target1_r = np.random.uniform(20, 35, self.n)  # 0~ D-d
@@ -341,6 +354,12 @@ class MUMT(Env):
             self.targets[target_idx].cal_age()
             reward += -self.targets[target_idx].age
         reward = reward / self.n # average reward of all targets
+        for uav_idx, uav in enumerate(self.uavs):  # Replace 'self.uavs' with how you access your UAVs
+            uav_x, uav_y, uav_theta = uav.state  # Replace with actual position attributes
+            uav_battery_level = uav.battery  # Replace with actual battery attribute
+            # self.trajectory_data.append((uav_x, uav_y, uav_battery_level, uav_theta))
+            self.trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
+
         if self.save_frames and int(self.step_count) % 6 == 0:
             image = self.render(action, mode="rgb_array")
             path = os.path.join(
@@ -445,6 +464,11 @@ class MUMT(Env):
             reward += -target1_copy.age*discount**i
         return dry_dict_observation, reward, terminal, truncated, {}
 
+    def battery_to_color(self, battery_level, max_battery=3000):
+        red = max(1 - battery_level / max_battery, 0)
+        green = min(battery_level / max_battery, 1)
+        return (red, green, 0)
+
     def render(self, action, mode="human"):
         if self.viewer is None:
             self.viewer = rendering.Viewer(1000, 1000)
@@ -503,7 +527,8 @@ class MUMT(Env):
             uav_transform = rendering.Transform(translation=(uav_x, uav_y), rotation=uav_theta)
             uav_tri = self.viewer.draw_polygon([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)])
             # try:
-            uav_tri.set_color(*self.uav_color[uav_idx])
+            # uav_tri.set_color(*self.uav_color[uav_idx])
+            uav_tri.set_color(*self.battery_to_color(uav.battery))
             uav_tri.add_attr(uav_transform)
             # except:
             #     print('len(self.uav_color): ',len(self.uav_color))
@@ -521,6 +546,149 @@ class MUMT(Env):
         # draw.text((0, 35), text1, color=(200, 200, 200), font=self.font)
         # draw.text((0, 70), text2, color=(255, 255, 0), font=self.font)
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
+
+    def plot_trajectory(self, policy):
+        plt.figure(figsize=(10, 6))
+
+        # Set the same scale for both axes
+        plt.axis('equal')
+
+        # Draw targets and their coverage bands
+        for target_idx, target in enumerate(self.targets):
+            target_x, target_y = target.state
+            # Generate a color from red to yellow for each target
+            target_color = plt.cm.spring(target_idx / len(self.targets))
+            plt.plot(target_x, target_y, marker='$\u2691$', color=target_color, markersize=15, 
+                    label=f'Target {target_idx+1}', linestyle='None', zorder=5)
+            
+            # Draw the coverage bands
+            coverage_band_outer = plt.Circle((target_x, target_y), self.d + self.l, 
+                                            color=target_color, fill=False, linestyle='-')
+            coverage_band_inner = plt.Circle((target_x, target_y), self.d - self.l, 
+                                            color=target_color, fill=False, linestyle='--')
+            plt.gca().add_patch(coverage_band_outer)
+            plt.gca().add_patch(coverage_band_inner)
+            # Fill between the coverage bands
+            circle_outer = plt.Circle((target_x, target_y), self.d + self.l, 
+                                    color=target_color, alpha=0.1)
+            plt.gca().add_patch(circle_outer)
+
+        # Draw the charging station
+        charging_station = plt.Circle((0, 0), self.r_c, color='blue', fill=True, alpha=0.3, label='Charging Station')
+        plt.gca().add_patch(charging_station)
+        # Draw the bolt sign inside the charging station
+        plt.plot(0, 0, marker='$\u26A1$', color='yellow', markersize=20, linestyle='None', zorder=5)
+
+        # Draw UAV trajectories
+        for uav_data in self.trajectory_data:  # Assuming self.trajectory_data is a list of lists, one per UAV
+            # Previous position (initialize with the first data point)
+            prev_x, prev_y, _, _ = uav_data[0]
+            for x, y, battery, _ in uav_data:
+                color = self.battery_to_color(battery)  # Define this function based on your needs
+                plt.plot([prev_x, x], [prev_y, y], color=color)  # Draw line segment
+                prev_x, prev_y = x, y  # Update previous position
+                # Get the last position to calculate the direction
+            last_x, last_y, _, last_theta = self.trajectory_data[-1]
+            second_last_x, second_last_y, _, _ = self.trajectory_data[-2]
+
+            # Calculate the direction vector from the second last to the last position
+            direction_x = last_x - second_last_x
+            direction_y = last_y - second_last_y
+
+            # Normalize the direction vector
+            length = np.hypot(direction_x, direction_y)
+            direction_x /= length
+            direction_y /= length
+
+            # Offset the position slightly in the opposite direction to align the tail with the trajectory
+            offset = -1.5  # Adjust this value as needed
+            aligned_x = last_x - direction_x * offset
+            aligned_y = last_y - direction_y * offset
+            airplane_marker = plt.text(aligned_x, aligned_y, s='$\u2708$', color='black', 
+                            ha='center', va='center', fontsize=25,
+                            rotation=np.degrees(last_theta), zorder=20)
+
+        limit = 60
+        plt.xlim(-limit, limit)
+        plt.ylim(-limit, limit)
+
+        plt.legend(loc='upper right')
+        plt.xlabel('X Position')
+        plt.ylabel('Y Position')
+        plt.title(f'UAV Trajectory for Policy {policy}')
+        plt.savefig(f'plot/UAV{self.m}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
+        plt.show()
+
+    # def plot_trajectory(self, policy):
+    #     plt.figure(figsize=(10, 6))
+
+    #     # Set the same scale for both axes
+    #     plt.axis('equal')
+        
+    #     # Draw the target
+    #     for target_idx, target in enumerate(self.targets):
+    #         target_x, target_y = target.state
+    #         # plt.scatter(target_x, target_y, color=self.uav_color[target_idx], label=f'Target {target_idx+1}')
+    #         plt.plot(target_x, target_y, marker='$\u2691$', color='orange', markersize=15, label=f'Target {target_idx+1}', linestyle='None', zorder=5)
+        
+    #     # Draw the coverage band (outer circle)
+    #     coverage_band_outer = plt.Circle((target_x, target_y), self.d + self.l, color='blue', fill=False, label='Coverage Band Outer')
+    #     plt.gca().add_patch(coverage_band_outer)
+
+    #     # Draw the coverage band (inner circle)
+    #     coverage_band_inner = plt.Circle((target_x, target_y), self.d - self.l, color='blue', fill=False, linestyle='--', label='Coverage Band Inner')
+    #     plt.gca().add_patch(coverage_band_inner)
+    #     # Fill between the coverage bands
+    #     circle_outer = plt.Circle((target_x, target_y), self.d + self.l, color='blue', alpha=0.1)
+    #     circle_inner = plt.Circle((target_x, target_y), self.d - self.l, color='white', alpha=1)
+    #     plt.gca().add_patch(circle_outer)
+    #     plt.gca().add_patch(circle_inner)
+
+    #     # Draw the charging station
+    #     charging_station = plt.Circle((0, 0), self.r_c, color='blue', fill=True, alpha=0.9, label='Charging Station')
+    #     plt.gca().add_patch(charging_station)
+        
+    #     # Draw the bolt sign inside the charging station
+    #     plt.plot(0, 0, marker='$\u26A1$', color='yellow', markersize=20, linestyle='None', zorder=5)
+
+    #     # Previous position (initialize with the first data point)
+    #     prev_x, prev_y, _, _ = self.trajectory_data[0]
+    #     for x, y, battery, theta in self.trajectory_data:
+    #         color = self.battery_to_color(battery)  # Define this function based on your needs
+    #         plt.plot([prev_x, x], [prev_y, y], color=color)  # Draw line segment
+    #         prev_x, prev_y = x, y  # Update previous position
+
+    #     # Get the last position and the second last position to calculate the direction
+    #     last_x, last_y, _, last_theta = self.trajectory_data[-1]
+    #     second_last_x, second_last_y, _, _ = self.trajectory_data[-2]
+
+    #     # Calculate the direction vector from the second last to the last position
+    #     direction_x = last_x - second_last_x
+    #     direction_y = last_y - second_last_y
+
+    #     # Normalize the direction vector
+    #     length = np.hypot(direction_x, direction_y)
+    #     direction_x /= length
+    #     direction_y /= length
+
+    #     # Offset the position slightly in the opposite direction to align the tail with the trajectory
+    #     offset = -1.5  # Adjust this value as needed
+    #     aligned_x = last_x - direction_x * offset
+    #     aligned_y = last_y - direction_y * offset
+    #     airplane_marker = plt.text(aligned_x, aligned_y, s='$\u2708$', color='black', 
+    #                     ha='center', va='center', fontsize=25,
+    #                     rotation=np.degrees(last_theta), zorder=20)
+
+    #     limit = 60
+    #     plt.xlim(-limit, limit)
+    #     plt.ylim(-limit, limit)
+
+    #     plt.legend(loc='upper right')
+    #     plt.xlabel('X Position')
+    #     plt.ylabel('Y Position')
+    #     # plt.title('UAV Trajectory with Battery Level Coloring')
+    #     plt.savefig(f'plot/UAV{self.m}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
+    #     plt.show()
 
     # @property
     def rel_observation(self, uav_idx, target_idx): # of target relative to uav

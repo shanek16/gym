@@ -18,3 +18,5 @@ from gym.envs.custom_env.mumt import MUMT
 from gym.envs.custom_env.mumt_v2 import MUMT_v2
 from gym.envs.custom_env.dkc_unicycle import DKC_Unicycle
 from gym.envs.custom_env.toc_unicycle import TOC_Unicycle
+from gym.envs.custom_env.noise_dkc_unicycle import Noise_DKC_Unicycle
+from gym.envs.custom_env.noise_toc_unicycle import Noise_TOC_Unicycle
