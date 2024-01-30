@@ -31,16 +31,17 @@ class DKC_Unicycle(Env):
         max_step=2000, # is max_step=2000 sufficient for the uav(r=75) to reach the target? -> Yes it is. it takes less than 1800 steps.
     ):  # 0.07273
         self.viewer = None
-        self.observation_space = Box(
-            low=array([r_min, -pi]), high=array([r_max, pi]), dtype=np.float32
-        )
         self.dt = dt
         self.v = v
-        self.vdt = v * dt
+        self.vdt = self.v * dt
         self.d = d
         self.d_min = d_min
+        self.r_max = r_max
         self.r_min = r_min
-        self.omega_max = v / d_min
+        self.omega_max = self.v / self.d_min
+        self.observation_space = Box(
+            low=array([self.r_min, -pi]), high=array([self.r_max, pi]), dtype=np.float32
+        )
         self.action_space = Box(
             low=array([-self.omega_max]), high=array([self.omega_max]), dtype=np.float32
         )
@@ -91,11 +92,11 @@ class DKC_Unicycle(Env):
         terminal = False
         truncated = False
         # clipping action
-        if action > self.omega_max:
-            action = self.omega_max
-        elif action < -self.omega_max:
-            action = -self.omega_max
-        dtheta = action * self.dt
+        if action[0] > self.omega_max:
+            action[0] = self.omega_max
+        elif action[0] < -self.omega_max:
+            action[0] = -self.omega_max
+        dtheta = action[0] * self.dt
         _lambda = dtheta / 2
         if _lambda == 0.0:
             self.state[0] += self.vdt * cos(self.state[-1])
@@ -173,7 +174,7 @@ if __name__ == '__main__':
     while step < 5000:
         step += 1
         action_sample = uav_env.controller(r, -uav_env.v * np.cos(alpha), np.sign(alpha))
-        # print(action_sample)
+        print(action_sample)
         # action_sample = uav_env.action_space.sample()
         # uav_env.step(action_sample[0])
         obs, _, _, _, _ = uav_env.step(action_sample)
