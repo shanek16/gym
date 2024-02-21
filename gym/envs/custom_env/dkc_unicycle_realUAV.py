@@ -20,15 +20,27 @@ class DKC_real_Unicycle(Env):
     def __init__(
         # [m/s]
         self,
-        r_max=4_000, #communication max=80_000, but from r>~4*d solution is the same.
+        # Strix 425
+        # r_max=4_000, #communication max=80_000, but from r>~4*d solution is the same.
+        # r_min=0.0,
+        # sigma=0.0,
+        # dt=0.02, # 50hz
+        # v=75_000/3600, # 75km/h -> m/s
+        # d=1000,
+        # d_min=370,
+        # k1=0.0181,
+        # max_step=24*1e4, # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
+
+        # LARUS
+        r_max=15_000, #communication max=80_000, but from r>~4*d solution is the same.
         r_min=0.0,
         sigma=0.0,
         dt=0.02, # 50hz
-        v=75_000/3600, # 75km/h -> m/s
-        d=1000,
-        d_min=370,
+        v=43_000/3600, # 75km/h -> m/s
+        d=100,
+        d_min=40,
         k1=0.0181,
-        max_step=24*1e4 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
+        max_step=65*1e3 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
     ):
         # [km/s]
         self.viewer = None
@@ -77,11 +89,11 @@ class DKC_real_Unicycle(Env):
         terminal = False
         truncated = False
         # clipping action
-        if action[0] > self.omega_max:
-            action[0] = self.omega_max
-        elif action[0] < -self.omega_max:
-            action[0] = -self.omega_max
-        dtheta = action[0] * self.dt
+        if action > self.omega_max:
+            action = self.omega_max
+        elif action < -self.omega_max:
+            action = -self.omega_max
+        dtheta = action * self.dt
         _lambda = dtheta / 2
         if _lambda == 0.0:
             self.state[0] += self.vdt * cos(self.state[-1])

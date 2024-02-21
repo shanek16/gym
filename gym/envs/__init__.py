@@ -435,3 +435,9 @@ register(
     entry_point="gym.envs.custom_env.dkc_unicycle_realUAV:DKC_real_Unicycle",
     max_episode_steps=24*1e4,
 )
+
+register(
+    id="TOC_real_Unicycle",
+    entry_point="gym.envs.custom_env.toc_unicycle_realUAV:TOC_real_Unicycle",
+    max_episode_steps=24*1e4,
+)

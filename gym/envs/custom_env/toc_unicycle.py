@@ -40,6 +40,7 @@ class TOC_Unicycle(Env):
         self.d = d
         self.d_min = d_min
         self.r_min = r_min
+        self.r_max = r_max
         self.omega_max = v / d_min
         self.action_space = Box(
             low=array([-self.omega_max]), high=array([self.omega_max]), dtype=np.float32
