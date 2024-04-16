@@ -14,32 +14,36 @@ import rendering
 
 warnings.filterwarnings("ignore")
 
-
-class TOC_Unicycle(Env):
+class TOC_real_Unicycle(Env):
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
-    '''
-    Unit:
-    - distance: m
-    - time: s
-    - velocity: m/s
-    - angle: rad
-    '''
     def __init__(
         self,
-        r_max=1000,#원래는 80_000만큼 해야하는데, v=1일때 40하고 뒤에는 붙였던거 고려
-        r_min=100,
+        # Double check to match the terminal condition: r < r_min in mdp.py
+
+        # Strix 425
+        # r_max=1_000,#원래는 80_000만큼 해야하는데, v=1일때 40하고 뒤에는 붙였던거 고려
+        # r_min=100,
+        # sigma=0.0,
+        # dt=0.02, # 50hz
+        # v=75_000/3600, # 75km/h -> m/s
+        # d_min=370,
+        # max_step=24*1e4 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
+
+        # LARUS
+        r_max=15_000,#원래는 15_000만큼 해야하는데, v=1일때 40하고 뒤에는 붙였던거 고려
+        r_min=1,
         sigma=0.0,
         dt=0.02, # 50hz
-        v=75_000/3600, # 75km/h -> m/s
-        d_min=370,
-        max_step=80/75*3600*50*1.3, # r_max/v*3600s*50hz*1.3
+        v=43_000/3600, # 75km/h -> m/s
+        d_min=40,
+        max_step=64*1e3 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
     ):
         self.viewer = None
         self.dt = dt
         self.v = v/1000
         self.vdt = self.v * dt
         self.d_min = d_min/1000
-        self.r_min = r_min/1000 # 80km as 80 in simulation
+        self.r_min = r_min/1000
         self.r_max = r_max/1000
         self.omega_max = self.v / self.d_min
         self.observation_space = Box(
@@ -79,11 +83,11 @@ class TOC_Unicycle(Env):
         terminal = False
         truncated = False
         # clipping action
-        if action[0] > self.omega_max:
-            action[0] = self.omega_max
-        elif action[0] < -self.omega_max:
-            action[0] = -self.omega_max
-        dtheta = action[0] * self.dt
+        if action > self.omega_max:
+            action = self.omega_max
+        elif action < -self.omega_max:
+            action = -self.omega_max
+        dtheta = action * self.dt
         _lambda = dtheta / 2
         if _lambda == 0.0:
             self.state[0] += self.vdt * cos(self.state[-1])
@@ -118,7 +122,7 @@ class TOC_Unicycle(Env):
         target = self.viewer.draw_circle(radius=self.r_min, filled=True)
         target.set_color(1, 0.6, 0)
         tf = rendering.Transform(translation=(x, y), rotation=theta)
-        tri = self.viewer.draw_polygon(self.scale_points([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)], 1/50))
+        tri = self.viewer.draw_polygon(self.scale_points([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)], 1/10))
         tri.set_color(0.5, 0.5, 0.9)
         tri.add_attr(tf)
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
@@ -144,7 +148,7 @@ def wrap(theta):
     return theta
 
 if __name__ == '__main__':
-    uav_env = TOC_Unicycle()
+    uav_env = TOC_real_Unicycle()
     action_sample = uav_env.action_space.sample()
     print("action_sample: ", action_sample)
 

@@ -9,7 +9,7 @@ import numpy as np
 from gym import Env
 from gym.spaces import Box
 from gym.utils import seeding
-from numpy import arctan2, array, cos, pi, sin
+from numpy import arctan2, array, cos, pi, sin, tan
 import rendering
 
 warnings.filterwarnings("ignore")
@@ -29,7 +29,7 @@ class TOC_Unicycle(Env):
         d_min=4.5,
         k1=0.0181,
         max_step=2000, # is max_step=2000 sufficient for the uav(r=75) to reach the target? -> Yes it is. it takes less than 1800 steps.
-    ):  # 0.07273
+    ):
         self.viewer = None
         self.observation_space = Box(
             low=array([r_min, -pi]), high=array([r_max, pi]), dtype=np.float32
@@ -40,6 +40,7 @@ class TOC_Unicycle(Env):
         self.d = d
         self.d_min = d_min
         self.r_min = r_min
+        self.r_max = r_max
         self.omega_max = v / d_min
         self.action_space = Box(
             low=array([-self.omega_max]), high=array([self.omega_max]), dtype=np.float32
@@ -55,6 +56,17 @@ class TOC_Unicycle(Env):
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
+
+    def controller(self, r, alpha):
+        try:
+            omegaRef = self.k1/tan(alpha) + (1 + 1/r)*sin(alpha)
+        except:
+            omegaRef = np.sign(alpha)*self.omega_max
+        if omegaRef > self.omega_max:
+            omegaRef = self.omega_max
+        elif omegaRef < -self.omega_max:
+            omegaRef = -self.omega_max
+        return omegaRef
 
     def reset(self, pose=None):
         self.step_count = 0
@@ -75,11 +87,11 @@ class TOC_Unicycle(Env):
         terminal = False
         truncated = False
         # clipping action
-        if action[0] > self.omega_max:
-            action[0] = self.omega_max
-        elif action[0] < -self.omega_max:
-            action[0] = -self.omega_max
-        dtheta = action[0] * self.dt
+        if action > self.omega_max:
+            action = self.omega_max
+        elif action < -self.omega_max:
+            action = -self.omega_max
+        dtheta = action * self.dt
         _lambda = dtheta / 2
         if _lambda == 0.0:
             self.state[0] += self.vdt * cos(self.state[-1])
@@ -148,9 +160,16 @@ if __name__ == '__main__':
     print('uav_env.observation_space:', uav_env.observation_space)
     
     step = 0
-    uav_env.reset()
+    obs = uav_env.reset()
+    r = obs[0]
+    alpha = obs[1]
     while step < 5000:
         step += 1
-        action_sample = uav_env.action_space.sample()
-        uav_env.step(action_sample)
+        # action_sample = uav_env.action_space.sample()
+        action_sample = uav_env.controller(r, alpha)
+        obs, _, _, _, _ = uav_env.step(action_sample)
+        r = obs[0]
+        alpha = obs[1]
         uav_env.render(action_sample)
+        if r < 1:
+            break

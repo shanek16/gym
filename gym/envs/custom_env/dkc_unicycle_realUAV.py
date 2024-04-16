@@ -14,22 +14,35 @@ import rendering
 
 warnings.filterwarnings("ignore")
 
-
-class DKC_Unicycle(Env):
+class DKC_real_Unicycle(Env):
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
 
     def __init__(
+        # [m/s]
         self,
-        r_max=8000, #80_000,원래는 이만큼 해야하는데, d=10 일 때 r_max=8*d고려
+        # Strix 425
+        # r_max=4_000, #communication max=80_000, but from r>~4*d solution is the same.
+        # r_min=0.0,
+        # sigma=0.0,
+        # dt=0.02, # 50hz
+        # v=75_000/3600, # 75km/h -> m/s
+        # d=1000,
+        # d_min=370,
+        # k1=0.0181,
+        # max_step=24*1e4, # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
+
+        # LARUS
+        r_max=15_000, #communication max=80_000, but from r>~4*d solution is the same.
         r_min=0.0,
         sigma=0.0,
         dt=0.02, # 50hz
-        v=75_000/3600, # 75km/h -> m/s
-        d=1000,
-        d_min=370,
+        v=43_000/3600, # 75km/h -> m/s
+        d=100,
+        d_min=40,
         k1=0.0181,
-        max_step=80/75*3600*50*1.5, # is max_step=2000 sufficient for the uav(r=75) to reach the target? -> Yes it is. it takes less than 1800 steps.
-    ):  # 0.07273
+        max_step=65*1e3 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
+    ):
+        # [km/s]
         self.viewer = None
         self.dt = dt
         self.v = v/1000
@@ -76,11 +89,11 @@ class DKC_Unicycle(Env):
         terminal = False
         truncated = False
         # clipping action
-        if action[0] > self.omega_max:
-            action[0] = self.omega_max
-        elif action[0] < -self.omega_max:
-            action[0] = -self.omega_max
-        dtheta = action[0] * self.dt
+        if action > self.omega_max:
+            action = self.omega_max
+        elif action < -self.omega_max:
+            action = -self.omega_max
+        dtheta = action * self.dt
         _lambda = dtheta / 2
         if _lambda == 0.0:
             self.state[0] += self.vdt * cos(self.state[-1])
@@ -144,7 +157,7 @@ def wrap(theta):
     return theta
 
 if __name__ == '__main__':
-    uav_env = DKC_Unicycle()
+    uav_env = DKC_real_Unicycle()
     action_sample = uav_env.action_space.sample()
     print("action_sample: ", action_sample)
 
@@ -159,5 +172,6 @@ if __name__ == '__main__':
     while step < 5000:
         step += 1
         action_sample = uav_env.action_space.sample()
+        print(action_sample)
         uav_env.step(action_sample)
         uav_env.render(action_sample)

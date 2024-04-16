@@ -8,7 +8,7 @@ import numpy as np
 from gym import Env
 from gym.spaces import Box, Dict, Discrete # MultiBinary, MultiDiscrete
 from typing import Optional
-# import rendering
+import rendering
 
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
@@ -66,30 +66,37 @@ class UAV1Target1_v2(Env):
             return array([r, alpha, beta])  # beta
 
     class Target:
-        def __init__(
-            self,
-            state,
-            age = 0,
-            ):
+        def __init__(self, state, age=0, motion_type='static', sigma_rayleigh=0.5):
             self.state = state
             self.surveillance = None
             self.age = age
+            self.motion_type = motion_type
+            self.sigma_rayleigh = sigma_rayleigh
 
         def copy(self):
-            # Create a new Target instance with the same attributes
-            return UAV1Target1_v2.Target(state=self.state.copy(), age=self.age)
-        
+            # Assuming the copy method is intended to create a copy within the same parent environment
+            return UAV1Target1_v2.Target(state=self.state.copy(), age=self.age, motion_type=self.motion_type, sigma_rayleigh=self.sigma_rayleigh)
+
         def cal_age(self):
-            if self.surveillance == 0: # uav1 is not surveilling
-                self.age = min(1000, self.age + 1) #changeage
+            if self.surveillance == 0:  # UAV is not surveilling
+                self.age = min(1000, self.age + 1)  # Change age
             else:
                 self.age = 0
+
+        def update_position(self):
+            if self.motion_type == 'rayleigh':
+                speed = np.random.rayleigh(self.sigma_rayleigh)
+                angle = np.random.uniform(0, 2*np.pi)
+                dx = speed * np.cos(angle) * self.dt
+                dy = speed * np.sin(angle) * self.dt
+                self.state += np.array([dx, dy])
+
         @property
-        def obs(self): # polar coordinate of a target
+        def obs(self):
             x, y = self.state
             r = np.sqrt(x**2 + y**2)
-            beta = arctan2(y, x)
-            return array([r, beta])  # beta
+            beta = np.arctan2(y, x)
+            return np.array([r, beta])  # r, beta
 
     def __init__(
         self,
@@ -180,6 +187,8 @@ class UAV1Target1_v2(Env):
         target_pose=None,
         battery=None,
         age=0,
+        target_type = 'static',
+        sigma_rayleigh=0.5,
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ):
@@ -219,7 +228,7 @@ class UAV1Target1_v2(Env):
             target_state = array((target1_r * cos(target1_beta), target1_r * sin(target1_beta)))
         else:
             target_state = target_pose
-        self.target1 = self.Target(state = target_state, age=age)
+        self.target1 = self.Target(state = target_state, age=age, motion_type=target_type, sigma_rayleigh=sigma_rayleigh)
 
         return self.dict_observation, {}
 
@@ -284,7 +293,7 @@ class UAV1Target1_v2(Env):
         action = np.squeeze(action)
         # action clipping is done in dp already
         self.uav1.charging = 0
-        # reward = 0
+        self.target1.update_position()
         if self.uav1.battery <= 0: # UAV dead
             pass
         else: # UAV alive: can take action
@@ -366,6 +375,7 @@ class UAV1Target1_v2(Env):
         for i in range(future):
             if truncated:
                 break
+            target1_copy.update_position()
             # Logic for UAV1's battery and actions
             uav1_copy.charging = 0
             if uav1_copy.battery <= 0:  # UAV dead
