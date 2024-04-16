@@ -389,8 +389,8 @@ register(
 )
 
 register(
-    id="UAV1Target1_ver2",
-    entry_point="gym.envs.custom_env.uav1target1_ver2:UAV1Target1_v2",
+    id="UAV1Target1_v2",
+    entry_point="gym.envs.custom_env.uav1target1_v2:UAV1Target1_v2",
     max_episode_steps=6000,
 )
 

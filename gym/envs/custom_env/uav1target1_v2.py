@@ -2,8 +2,8 @@ import os
 import sys
 # current_file_path = os.path.dirname(os.path.abspath(__file__))
 # sys.path.append(current_file_path)
-desired_path = os.path.expanduser("~/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/gym")
-sys.path.append(desired_path)
+# desired_path = os.path.expanduser("~/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/gym")
+# sys.path.append(desired_path)
 import numpy as np
 from gym import Env
 from gym.spaces import Box, Dict, Discrete # MultiBinary, MultiDiscrete
@@ -144,7 +144,7 @@ class UAV1Target1_v2(Env):
         self.episode_counter = 0
         self.frame_counter = 0
         self.save_frames = False
-        self.print_q_init()
+        # self.print_q_init()
 
         # initialization for Dynamic Programming
         self.n_r = 800
@@ -224,6 +224,10 @@ class UAV1Target1_v2(Env):
         return self.dict_observation, {}
 
     def print_q_init(self):
+        '''
+        Initalization function for printing q value on frame for debugging purpose.
+        (Check if discretization and 1u1t value table's state setting matches with current discretization settings.)
+        '''
         self.n_alpha = 10
         # simple version
         # self.target_discretized_r_space = np.arange(0,81,20)
@@ -240,8 +244,9 @@ class UAV1Target1_v2(Env):
         self.battery_space = np.concatenate([np.arange(0, 500, 100), np.arange(500, 3100, 500)])
 
         self.age_space = np.arange(0, 1001, 100) #changeage
-        self.UAV1Target1_result00 = np.load(f"/home/shane16/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/RESULTS/1U1T_s6_age1000:100_gamma_{self.discount}_dt_{self.dt}_{'val'}_iter.npz")
-        self.UAV1Target1_straightened_policy00 = self.UAV1Target1_result00["policy"]
+        # self.UAV1Target1_result00 = np.load(f"/home/shane16/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/RESULTS/1U1T_s6_age1000:100_gamma_{self.discount}_dt_{self.dt}_{'val'}_iter.npz")
+        self.UAV1Target1_result00 = np.load(os.getcwd() + f"/RESULTS/1U1T_s6_age1000:100_gamma_{self.discount}_dt_{self.dt}_{'val'}_iter.npz")
+        # self.UAV1Target1_straightened_policy00 = self.UAV1Target1_result00["policy"]
         self.UAV1Target1_values00 = self.UAV1Target1_result00["values"]
         # print('shape of UAV1Target1_straightened_policy00: ', np.shape(self.UAV1Target1_straightened_policy00))
         # print('shape of UAV1Target1_values00: ', np.shape(self.UAV1Target1_values00))
@@ -498,6 +503,10 @@ class UAV1Target1_v2(Env):
         return dictionary_obs
     
     def print_q_value(self):
+        '''
+        1. Compute q value and print save it to variables.
+        2. Use it to print q values on frames when save_frames=True.
+        '''
         # dry_step with 1 env
         # 1) get reward for each action: 0 & 1
         state0, reward0, _, _, _ = self.dry_step(action=0)
