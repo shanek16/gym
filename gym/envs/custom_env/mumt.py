@@ -1,9 +1,7 @@
 import os
 import sys
-current_file_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_file_path)
-# desired_path = os.path.expanduser("~/Project/PERSISTENT/Gymnasium")
-# sys.path.append(desired_path)
+# current_file_path = os.path.dirname(os.path.abspath(__file__))
+# sys.path.append(current_file_path)
 desired_path = os.path.expanduser("~/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/gym")
 sys.path.append(desired_path)
 import numpy as np
@@ -16,9 +14,6 @@ import rendering
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
 from PIL import Image, ImageDraw, ImageFont
-from heuristic import r_t_hungarian, high_age_first
-from matplotlib import pyplot as plt
-# from matplotlib.transforms import Affine2D
 
 def wrap(theta):
     if theta > pi:
@@ -30,8 +25,7 @@ def wrap(theta):
 class MUMT(Env):
     '''
     ver 1: 
-    - if initial # of uavs, targets don't change,
-    - include all uav-target pairs as observation for value comparison
+    - Initial # of uavs, targets don't change -> include all uav-target pairs as observation for value comparison
     '''
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
     class UAV:
@@ -70,7 +64,7 @@ class MUMT(Env):
                         # beta                  # theta
             alpha = wrap(arctan2(y, x) - wrap(self.state[-1]) - pi)
             beta = arctan2(y, x)
-            return array([r, alpha, beta], dtype=np.float32)  # beta
+            return array([r, alpha, beta])  # beta
 
     class Target:
         def __init__(
@@ -96,11 +90,10 @@ class MUMT(Env):
             x, y = self.state
             r = np.sqrt(x**2 + y**2)
             beta = arctan2(y, x)
-            return array([r, beta], dtype=np.float32)  # beta
+            return array([r, beta])  # beta
 
     def __init__(
         self,
-        render_mode: Optional[str] = None,
         r_max=80,
         r_min=0,
         dt=0.05,
@@ -113,7 +106,6 @@ class MUMT(Env):
         seed = None # one circle 1200 time steps
     ):
         super().__init__()
-        self.render_mode = render_mode
         self.seed = seed
         # Create the observation space
         obs_space = {}
@@ -146,7 +138,6 @@ class MUMT(Env):
         self.action_space = MultiDiscrete([n + 1] * m, seed=self.seed)
         self.dt = dt
         self.discount = 0.999
-        self.r_max = r_max
         self.d = d  # target distance
         self.l = l  # coverage gap: coverage: d-l ~ d+l # noqa
         self.m = m  # of uavs
@@ -160,7 +151,7 @@ class MUMT(Env):
         self.num2str = {0: "charge", 1: "target_1"}
         self.max_step = max_step
         self.viewer = None
-        self.SAVE_FRAMES_PATH = "../../../../visualized/2U2T" # example. save frames path is set at surveillance_PPO.py
+        self.SAVE_FRAMES_PATH = "../../../../visualized/MUMT" # example. save frames path is set at surveillance_PPO.py
         self.episode_counter = 0
         self.frame_counter = 0
         self.save_frames = False
@@ -193,7 +184,6 @@ class MUMT(Env):
                 (-1, 1)
             )
         )
-        self.trajectory_data = [[] for _ in range(self.m)]
 
     def reset(
         self,
@@ -206,9 +196,7 @@ class MUMT(Env):
     ):
         self.uavs = []
         self.targets = []
-        self.trajectory_data = [[] for _ in range(self.m)]
         np.random.seed(seed)
-        self.seed = seed
         self.episode_counter += 1
         self.step_count = 0
         if self.save_frames:
@@ -236,12 +224,6 @@ class MUMT(Env):
         # Create UAV instances
         for i in range(self.m):
             self.uavs.append(self.UAV(state=uav_states[i], battery=batteries[i]))
-        for uav_idx, uav in enumerate(self.uavs):  # Replace 'self.uavs' with how you access your UAVs
-            uav_x, uav_y, uav_theta = uav.state  # Replace with actual position attributes
-            uav_battery_level = uav.battery  # Replace with actual battery attribute
-            # self.trajectory_data.append((uav_x, uav_y, uav_battery_level, uav_theta))
-            self.trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
-
 
 
         if target_pose is None:
@@ -250,7 +232,7 @@ class MUMT(Env):
             target_states = np.array([target1_r * np.cos(target1_beta), target1_r * np.sin(target1_beta)]).T
             ages = [0] * self.n
         else:
-            target_states, ages = target_pose  # Assuming target_pose is an iterable of target states
+            target_states = target_pose  # Assuming target_pose is an iterable of target states
         # Create Target instances
         for i in range(self.n):
             self.targets.append(self.Target(state=target_states[i], age=ages[i]))
@@ -273,7 +255,7 @@ class MUMT(Env):
         self.battery_space = np.concatenate([np.arange(0, 500, 100), np.arange(500, 3100, 500)])
 
         self.age_space = np.arange(0, 1001, 100) #changeage
-        self.UAV1Target1_result00 = np.load(current_file_path + f"/1U1T_s6_age1000:100_gamma_{self.discount}_dt_{self.dt}_{'val'}_iter.npz")
+        self.UAV1Target1_result00 = np.load(f"/home/shane16/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/RESULTS/1U1T_s6_age1000:100_gamma_{self.discount}_dt_{self.dt}_{'val'}_iter.npz")
         self.UAV1Target1_straightened_policy00 = self.UAV1Target1_result00["policy"]
         self.UAV1Target1_values00 = self.UAV1Target1_result00["values"]
         # print('shape of UAV1Target1_straightened_policy00: ', np.shape(self.UAV1Target1_straightened_policy00))
@@ -338,12 +320,10 @@ class MUMT(Env):
         truncated = False
         action = np.squeeze(action)
         reward = 0
-        # TODO: if action is a 0-d array, convert to 1d array
         if action.ndim == 0:
             action = np.expand_dims(action, axis=0)
         for uav_idx, uav_action in enumerate(action):
             self.control_uav(uav_idx, uav_action)
-
         surveillance_matrix = np.zeros((self.m, self.n))
         for uav_idx in range(self.m):
             for target_idx in range(self.n):
@@ -354,12 +334,6 @@ class MUMT(Env):
             self.targets[target_idx].cal_age()
             reward += -self.targets[target_idx].age
         reward = reward / self.n # average reward of all targets
-        for uav_idx, uav in enumerate(self.uavs):  # Replace 'self.uavs' with how you access your UAVs
-            uav_x, uav_y, uav_theta = uav.state  # Replace with actual position attributes
-            uav_battery_level = uav.battery  # Replace with actual battery attribute
-            # self.trajectory_data.append((uav_x, uav_y, uav_battery_level, uav_theta))
-            self.trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
-
         if self.save_frames and int(self.step_count) % 6 == 0:
             image = self.render(action, mode="rgb_array")
             path = os.path.join(
@@ -415,9 +389,6 @@ class MUMT(Env):
         dry_dict_observation['uav1_target1'] = self.rel_observation(uav_idx, target_idx)[:2]
         dry_dict_observation['uav1_charge_station'] = uav1_copy.obs[:2]
         dry_dict_observation = self.dict_observation.copy()
-        # print('Before:')
-        # print('uav1_target1: ', dry_dict_observation['uav1_target1'])
-        # print('uav1_charge_station: ', dry_dict_observation['uav1_charge_station'])
         for i in range(future):
             if truncated:
                 break
@@ -455,19 +426,14 @@ class MUMT(Env):
 
             dry_dict_observation = { # is this state s_{t+10}?: Yes it is
                 # r, alpha
-                "uav1_target1": np.array([r_t, alpha_t], dtype=np.float32,),
-                "uav1_charge_station": np.array([uav1_copy.obs[0], uav1_copy.obs[1]], dtype=np.float32,),
+                "uav1_target1": np.float32([r_t, alpha_t]),
+                "uav1_charge_station": np.float32([uav1_copy.obs[0], uav1_copy.obs[1]]),
                 "battery":  np.float32(uav1_copy.battery),
                 "age": target1_copy.age,
                 # "previous_action": action
             }
             reward += -target1_copy.age*discount**i
         return dry_dict_observation, reward, terminal, truncated, {}
-
-    def battery_to_color(self, battery_level, max_battery=3000):
-        red = max(1 - battery_level / max_battery, 0)
-        green = min(battery_level / max_battery, 1)
-        return (red, green, 0)
 
     def render(self, action, mode="human"):
         if self.viewer is None:
@@ -526,169 +492,15 @@ class MUMT(Env):
             uav_x, uav_y, uav_theta = uav.state
             uav_transform = rendering.Transform(translation=(uav_x, uav_y), rotation=uav_theta)
             uav_tri = self.viewer.draw_polygon([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)])
-            # try:
-            # uav_tri.set_color(*self.uav_color[uav_idx])
-            uav_tri.set_color(*self.battery_to_color(uav.battery))
-            uav_tri.add_attr(uav_transform)
-            # except:
-            #     print('len(self.uav_color): ',len(self.uav_color))
-            #     print('uav_idx: ', uav_idx)
-            #     input()
-        # image = self.viewer.render(return_rgb_array=True)
-        # image = Image.fromarray(image)
-        # draw = ImageDraw.Draw(image)
-        # # left upper corner
-        # text0 = f"action: {action}"
-        # # convert to %
-        # text1 = f"battery: {self.dict_observation['battery']/3000}%"
-        # text2 = "age: {}".format(self.dict_observation['age'])
-        # draw.text((0, 0), text0, color=(200, 200, 200), font=self.font)
-        # draw.text((0, 35), text1, color=(200, 200, 200), font=self.font)
-        # draw.text((0, 70), text2, color=(255, 255, 0), font=self.font)
+            try:
+                uav_tri.set_color(*self.uav_color[uav_idx])
+                uav_tri.add_attr(uav_transform)
+            except:
+                print('len(self.uav_color): ',len(self.uav_color))
+                print('uav_idx: ', uav_idx)
+                input()
+
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
-
-    def plot_trajectory(self, policy):
-        plt.figure(figsize=(10, 6))
-
-        # Set the same scale for both axes
-        plt.axis('equal')
-
-        # Draw targets and their coverage bands
-        for target_idx, target in enumerate(self.targets):
-            target_x, target_y = target.state
-            # Generate a color from red to yellow for each target
-            target_color = plt.cm.spring(target_idx / len(self.targets))
-            plt.plot(target_x, target_y, marker='$\u2691$', color=target_color, markersize=15, 
-                    label=f'Target {target_idx+1}', linestyle='None', zorder=5)
-            
-            # Draw the coverage bands
-            coverage_band_outer = plt.Circle((target_x, target_y), self.d + self.l, 
-                                            color=target_color, fill=False, linestyle='-')
-            coverage_band_inner = plt.Circle((target_x, target_y), self.d - self.l, 
-                                            color=target_color, fill=False, linestyle='--')
-            plt.gca().add_patch(coverage_band_outer)
-            plt.gca().add_patch(coverage_band_inner)
-            # Fill between the coverage bands
-            circle_outer = plt.Circle((target_x, target_y), self.d + self.l, 
-                                    color=target_color, alpha=0.1)
-            plt.gca().add_patch(circle_outer)
-
-        # Draw the charging station
-        charging_station = plt.Circle((0, 0), self.r_c, color='blue', fill=True, alpha=0.3, label='Charging Station')
-        plt.gca().add_patch(charging_station)
-        # Draw the bolt sign inside the charging station
-        plt.plot(0, 0, marker='$\u26A1$', color='yellow', markersize=20, linestyle='None', zorder=5)
-
-        # Draw UAV trajectories
-        for uav_data in self.trajectory_data:  # Assuming self.trajectory_data is a list of lists, one per UAV
-            # Previous position (initialize with the first data point)
-            prev_x, prev_y, _, _ = uav_data[0]
-            for x, y, battery, _ in uav_data:
-                color = self.battery_to_color(battery)  # Define this function based on your needs
-                plt.plot([prev_x, x], [prev_y, y], color=color)  # Draw line segment
-                prev_x, prev_y = x, y  # Update previous position
-                # Get the last position to calculate the direction
-            last_x, last_y, _, last_theta = self.trajectory_data[-1]
-            second_last_x, second_last_y, _, _ = self.trajectory_data[-2]
-
-            # Calculate the direction vector from the second last to the last position
-            direction_x = last_x - second_last_x
-            direction_y = last_y - second_last_y
-
-            # Normalize the direction vector
-            length = np.hypot(direction_x, direction_y)
-            direction_x /= length
-            direction_y /= length
-
-            # Offset the position slightly in the opposite direction to align the tail with the trajectory
-            offset = -1.5  # Adjust this value as needed
-            aligned_x = last_x - direction_x * offset
-            aligned_y = last_y - direction_y * offset
-            airplane_marker = plt.text(aligned_x, aligned_y, s='$\u2708$', color='black', 
-                            ha='center', va='center', fontsize=25,
-                            rotation=np.degrees(last_theta), zorder=20)
-
-        limit = 60
-        plt.xlim(-limit, limit)
-        plt.ylim(-limit, limit)
-
-        plt.legend(loc='upper right')
-        plt.xlabel('X Position')
-        plt.ylabel('Y Position')
-        plt.title(f'UAV Trajectory for Policy {policy}')
-        plt.savefig(f'plot/UAV{self.m}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
-        plt.show()
-
-    # def plot_trajectory(self, policy):
-    #     plt.figure(figsize=(10, 6))
-
-    #     # Set the same scale for both axes
-    #     plt.axis('equal')
-        
-    #     # Draw the target
-    #     for target_idx, target in enumerate(self.targets):
-    #         target_x, target_y = target.state
-    #         # plt.scatter(target_x, target_y, color=self.uav_color[target_idx], label=f'Target {target_idx+1}')
-    #         plt.plot(target_x, target_y, marker='$\u2691$', color='orange', markersize=15, label=f'Target {target_idx+1}', linestyle='None', zorder=5)
-        
-    #     # Draw the coverage band (outer circle)
-    #     coverage_band_outer = plt.Circle((target_x, target_y), self.d + self.l, color='blue', fill=False, label='Coverage Band Outer')
-    #     plt.gca().add_patch(coverage_band_outer)
-
-    #     # Draw the coverage band (inner circle)
-    #     coverage_band_inner = plt.Circle((target_x, target_y), self.d - self.l, color='blue', fill=False, linestyle='--', label='Coverage Band Inner')
-    #     plt.gca().add_patch(coverage_band_inner)
-    #     # Fill between the coverage bands
-    #     circle_outer = plt.Circle((target_x, target_y), self.d + self.l, color='blue', alpha=0.1)
-    #     circle_inner = plt.Circle((target_x, target_y), self.d - self.l, color='white', alpha=1)
-    #     plt.gca().add_patch(circle_outer)
-    #     plt.gca().add_patch(circle_inner)
-
-    #     # Draw the charging station
-    #     charging_station = plt.Circle((0, 0), self.r_c, color='blue', fill=True, alpha=0.9, label='Charging Station')
-    #     plt.gca().add_patch(charging_station)
-        
-    #     # Draw the bolt sign inside the charging station
-    #     plt.plot(0, 0, marker='$\u26A1$', color='yellow', markersize=20, linestyle='None', zorder=5)
-
-    #     # Previous position (initialize with the first data point)
-    #     prev_x, prev_y, _, _ = self.trajectory_data[0]
-    #     for x, y, battery, theta in self.trajectory_data:
-    #         color = self.battery_to_color(battery)  # Define this function based on your needs
-    #         plt.plot([prev_x, x], [prev_y, y], color=color)  # Draw line segment
-    #         prev_x, prev_y = x, y  # Update previous position
-
-    #     # Get the last position and the second last position to calculate the direction
-    #     last_x, last_y, _, last_theta = self.trajectory_data[-1]
-    #     second_last_x, second_last_y, _, _ = self.trajectory_data[-2]
-
-    #     # Calculate the direction vector from the second last to the last position
-    #     direction_x = last_x - second_last_x
-    #     direction_y = last_y - second_last_y
-
-    #     # Normalize the direction vector
-    #     length = np.hypot(direction_x, direction_y)
-    #     direction_x /= length
-    #     direction_y /= length
-
-    #     # Offset the position slightly in the opposite direction to align the tail with the trajectory
-    #     offset = -1.5  # Adjust this value as needed
-    #     aligned_x = last_x - direction_x * offset
-    #     aligned_y = last_y - direction_y * offset
-    #     airplane_marker = plt.text(aligned_x, aligned_y, s='$\u2708$', color='black', 
-    #                     ha='center', va='center', fontsize=25,
-    #                     rotation=np.degrees(last_theta), zorder=20)
-
-    #     limit = 60
-    #     plt.xlim(-limit, limit)
-    #     plt.ylim(-limit, limit)
-
-    #     plt.legend(loc='upper right')
-    #     plt.xlabel('X Position')
-    #     plt.ylabel('Y Position')
-    #     # plt.title('UAV Trajectory with Battery Level Coloring')
-    #     plt.savefig(f'plot/UAV{self.m}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
-    #     plt.show()
 
     # @property
     def rel_observation(self, uav_idx, target_idx): # of target relative to uav
@@ -699,7 +511,7 @@ class MUMT(Env):
         r = np.sqrt(x**2 + y**2)
         beta = arctan2(y, x)
         alpha = wrap(beta - wrap(theta))
-        return array([r, alpha, beta],dtype=np.float32)
+        return array([r, alpha, beta])
 
     @property
     def dict_observation(self):
@@ -757,26 +569,18 @@ if __name__ == "__main__":
     state, reward, _, _, _ = env.step(action=0)
     print(state0)
     print(state)'''
-    m=4
-    n=2
-    uav_env = MUMT(m=m, n=n)
+    
+    uav_env = MUMT(m=10, n=6)
 
     # Number of features
     state_sample = uav_env.observation_space.sample()
     action_sample = uav_env.action_space.sample()
-    # print("state_sample: ", state_sample)
-    # print("action_sample: ", action_sample)
-    # print('uav_env.observation_space:', uav_env.observation_space)
-    # print('uav_env.action_space.n: ', uav_env.action_space)
+    print("state_sample: ", state_sample)
+    print("action_sample: ", action_sample)
+    print('uav_env.observation_space:', uav_env.observation_space)
+    print('uav_env.action_space.n: ', uav_env.action_space)
         
     # testing env: alternating action
-    '''# target1_r = np.random.uniform(20, 35, self.n)  # 0~ D-d
-    # target1_beta = np.random.uniform(-np.pi, np.pi, self.n)
-    target_states = np.array([np.array([0, 24]), np.array([30, 20])]).T
-    ages = [100] * n
-    batteries = np.array([3000, 1000])
-
-    # obs, _ = uav_env.reset(target_pose=(target_states, ages), batteries=batteries)
     obs, _ = uav_env.reset()
     step = 0
     while step < 5000:
@@ -786,30 +590,42 @@ if __name__ == "__main__":
         obs, reward, _, truncated, _ = uav_env.step(action_sample)
         bat = obs['battery']
         print(f'step: {step} | battery: {bat} | reward: {reward}')
-        uav_env.render(action_sample)'''
+        uav_env.render(action_sample)
     
-    # Heuristic policy
-    repitition = 10
+    # testing env: heuristic policy
+    '''repitition = 10
     avg_reward = 0
     for i in range(repitition):
         step = 0
         truncated = False
         obs, _ = uav_env.reset(seed=i)
+        bat = obs['battery']
+        age = obs['age']
         total_reward = 0
         while truncated == False:
             step += 1
-            # action = r_t_hungarian(obs, m, n)
-            action = high_age_first(obs, m)
-            # action = np.arange(1, m + 1)
-            # action = np.where(action > n, 0, action)
+            r_c = obs['uav1_charge_station'][0]
+            if bat > 2000:
+                action = 1
+            elif bat > 1000:
+                # previous_action = obs['previous_action']
+                if age == 0 or age > 800: # uav was surveilling
+                # if previous_action:
+                    action = 1
+                else: # uav was charging
+                    action = 0
+            else:
+                action = 0
+            
             obs, reward, _, truncated, _ = uav_env.step(action)
             total_reward += reward
             bat = obs['battery']
             age = obs['age']
-            print(f'step: {step} | battery: {bat} | reward: {reward}') #, end=' |')
+            # print(f'step: {step} | battery: {bat} | reward: {reward}') #, end=' |')
             # print(f'action: {action}')#, end=' |')
-            uav_env.render(action, mode='rgb_array')
+            # uav_env.print_q_value()
+            # uav_env.render(action, mode='rgb_array')
         print(f'{i}: {total_reward}')   
         avg_reward += total_reward
     avg_reward /= repitition
-    print(f'average reward: {avg_reward}')
+    print(f'average reward: {avg_reward}')'''
