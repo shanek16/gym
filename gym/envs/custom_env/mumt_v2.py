@@ -73,31 +73,38 @@ class MUMT_v2(Env):
             return array([r, alpha, beta], dtype=np.float32)  # beta
 
     class Target:
-        def __init__(
-            self,
-            state,
-            age = 0,
-            ):
+        def __init__(self, state, age=0, motion_type='static', sigma_rayleigh=0.5):
             self.state = state
             self.surveillance = None
             self.age = age
+            self.motion_type = motion_type
+            self.sigma_rayleigh = sigma_rayleigh
 
         def copy(self):
-            # Create a new Target instance with the same attributes
-            return MUMT_v2.Target(state=self.state.copy(), age=self.age)
-        
+            # Assuming the copy method is intended to create a copy within the same parent environment
+            return MUMT_v2.Target(state=self.state.copy(), age=self.age, motion_type=self.motion_type, sigma_rayleigh=self.sigma_rayleigh)
+
         def cal_age(self):
-            if self.surveillance == 0: # uav1 is not surveilling
-                self.age = min(1000, self.age + 1) #changeage
+            if self.surveillance == 0:  # UAV is not surveilling
+                self.age = min(1000, self.age + 1)  # Change age
             else:
                 self.age = 0
+
+        def update_position(self):
+            if self.motion_type == 'rayleigh':
+                speed = np.random.rayleigh(self.sigma_rayleigh)
+                angle = np.random.uniform(0, 2*np.pi)
+                dx = speed * np.cos(angle) * self.dt
+                dy = speed * np.sin(angle) * self.dt
+                self.state += np.array([dx, dy])
+
         @property
-        def obs(self): # polar coordinate of a target
+        def obs(self):
             x, y = self.state
             r = np.sqrt(x**2 + y**2)
-            beta = arctan2(y, x)
-            return array([r, beta], dtype=np.float32)  # beta
-
+            beta = np.arctan2(y, x)
+            return np.array([r, beta])  # r, beta
+        
     def __init__(
         self,
         render_mode: Optional[str] = None,
@@ -193,7 +200,8 @@ class MUMT_v2(Env):
                 (-1, 1)
             )
         )
-        self.trajectory_data = [[] for _ in range(self.m)]
+        self.uav_trajectory_data = [[] for _ in range(self.m)]
+        self.target_trajectory_data = [[] for _ in range(self.n)]
 
     def reset(
         self,
@@ -201,12 +209,15 @@ class MUMT_v2(Env):
         target_pose=None,
         batteries=None,
         ages=None,
+        target_type = 'static',
+        sigma_rayleigh=0.5,
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ):
         self.uavs = []
         self.targets = []
-        self.trajectory_data = [[] for _ in range(self.m)]
+        self.uav_trajectory_data = [[] for _ in range(self.m)]
+        self.target_trajectory_data = [[] for _ in range(self.n)]
         np.random.seed(seed)
         self.seed = seed
         self.episode_counter += 1
@@ -239,10 +250,7 @@ class MUMT_v2(Env):
         for uav_idx, uav in enumerate(self.uavs):  # Replace 'self.uavs' with how you access your UAVs
             uav_x, uav_y, uav_theta = uav.state  # Replace with actual position attributes
             uav_battery_level = uav.battery  # Replace with actual battery attribute
-            # self.trajectory_data.append((uav_x, uav_y, uav_battery_level, uav_theta))
-            self.trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
-
-
+            self.uav_trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
 
         if target_pose is None:
             target1_r = np.random.uniform(20, 35, self.n)  # 0~ D-d
@@ -251,9 +259,10 @@ class MUMT_v2(Env):
             ages = [0] * self.n
         else:
             target_states, ages = target_pose  # Assuming target_pose is an iterable of target states
+
         # Create Target instances
         for i in range(self.n):
-            self.targets.append(self.Target(state=target_states[i], age=ages[i]))
+            self.targets.append(self.Target(state=target_states[i], age=ages[i], motion_type=target_type, sigma_rayleigh=sigma_rayleigh))
         return self.dict_observation, {}
 
     def q_init(self):
@@ -356,8 +365,7 @@ class MUMT_v2(Env):
         for uav_idx, uav in enumerate(self.uavs):  # Replace 'self.uavs' with how you access your UAVs
             uav_x, uav_y, uav_theta = uav.state  # Replace with actual position attributes
             uav_battery_level = uav.battery  # Replace with actual battery attribute
-            # self.trajectory_data.append((uav_x, uav_y, uav_battery_level, uav_theta))
-            self.trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
+            self.uav_trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
 
         if self.save_frames and int(self.step_count) % 6 == 0:
             image = self.render(action, mode="rgb_array")
@@ -562,15 +570,12 @@ class MUMT_v2(Env):
             
             # Draw the coverage bands
             coverage_band_outer = plt.Circle((target_x, target_y), self.d + self.l, 
-                                            color=target_color, fill=False, linestyle='-')
+                                            color=target_color, alpha=0.3)
             coverage_band_inner = plt.Circle((target_x, target_y), self.d - self.l, 
-                                            color=target_color, fill=False, linestyle='--')
+                                            color='white', alpha=1)
             plt.gca().add_patch(coverage_band_outer)
             plt.gca().add_patch(coverage_band_inner)
-            # Fill between the coverage bands
-            circle_outer = plt.Circle((target_x, target_y), self.d + self.l, 
-                                    color=target_color, alpha=0.1)
-            plt.gca().add_patch(circle_outer)
+
 
         # Draw the charging station
         charging_station = plt.Circle((0, 0), self.r_c, color='blue', fill=True, alpha=0.3, label='Charging Station')
@@ -579,16 +584,17 @@ class MUMT_v2(Env):
         plt.plot(0, 0, marker='$\u26A1$', color='yellow', markersize=20, linestyle='None', zorder=5)
 
         # Draw UAV trajectories
-        for uav_data in self.trajectory_data:  # Assuming self.trajectory_data is a list of lists, one per UAV
+        for uav_idx, uav_data in enumerate(self.uav_trajectory_data):  # Assuming self.uav_trajectory_data is a list of lists, one per UAV
             # Previous position (initialize with the first data point)
-            prev_x, prev_y, _, _ = uav_data[0]
+            prev_x, prev_y, _, _ = uav_data[uav_idx]
+            # prev_x, prev_y, _, _ = uav_data
             for x, y, battery, _ in uav_data:
                 color = self.battery_to_color(battery)  # Define this function based on your needs
                 plt.plot([prev_x, x], [prev_y, y], color=color)  # Draw line segment
                 prev_x, prev_y = x, y  # Update previous position
                 # Get the last position to calculate the direction
-            last_x, last_y, _, last_theta = self.trajectory_data[-1]
-            second_last_x, second_last_y, _, _ = self.trajectory_data[-2]
+            last_x, last_y, _, last_theta = self.uav_trajectory_data[uav_idx][-1]
+            second_last_x, second_last_y, _, _ = self.uav_trajectory_data[uav_idx][-2]
 
             # Calculate the direction vector from the second last to the last position
             direction_x = last_x - second_last_x
@@ -600,9 +606,9 @@ class MUMT_v2(Env):
             direction_y /= length
 
             # Offset the position slightly in the opposite direction to align the tail with the trajectory
-            offset = -1.5  # Adjust this value as needed
-            aligned_x = last_x - direction_x * offset
-            aligned_y = last_y - direction_y * offset
+            offset = 1.5  # Adjust this value as needed
+            aligned_x = last_x + direction_x * offset
+            aligned_y = last_y + direction_y * offset
             airplane_marker = plt.text(aligned_x, aligned_y, s='$\u2708$', color='black', 
                             ha='center', va='center', fontsize=25,
                             rotation=np.degrees(last_theta), zorder=20)
@@ -615,79 +621,8 @@ class MUMT_v2(Env):
         plt.xlabel('X Position')
         plt.ylabel('Y Position')
         plt.title(f'UAV Trajectory for Policy {policy}')
-        plt.savefig(f'plot/UAV{self.m}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
+        plt.savefig(f'PLOT/UAV{self.m}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
         plt.show()
-
-    # def plot_trajectory(self, policy):
-    #     plt.figure(figsize=(10, 6))
-
-    #     # Set the same scale for both axes
-    #     plt.axis('equal')
-        
-    #     # Draw the target
-    #     for target_idx, target in enumerate(self.targets):
-    #         target_x, target_y = target.state
-    #         # plt.scatter(target_x, target_y, color=self.uav_color[target_idx], label=f'Target {target_idx+1}')
-    #         plt.plot(target_x, target_y, marker='$\u2691$', color='orange', markersize=15, label=f'Target {target_idx+1}', linestyle='None', zorder=5)
-        
-    #     # Draw the coverage band (outer circle)
-    #     coverage_band_outer = plt.Circle((target_x, target_y), self.d + self.l, color='blue', fill=False, label='Coverage Band Outer')
-    #     plt.gca().add_patch(coverage_band_outer)
-
-    #     # Draw the coverage band (inner circle)
-    #     coverage_band_inner = plt.Circle((target_x, target_y), self.d - self.l, color='blue', fill=False, linestyle='--', label='Coverage Band Inner')
-    #     plt.gca().add_patch(coverage_band_inner)
-    #     # Fill between the coverage bands
-    #     circle_outer = plt.Circle((target_x, target_y), self.d + self.l, color='blue', alpha=0.1)
-    #     circle_inner = plt.Circle((target_x, target_y), self.d - self.l, color='white', alpha=1)
-    #     plt.gca().add_patch(circle_outer)
-    #     plt.gca().add_patch(circle_inner)
-
-    #     # Draw the charging station
-    #     charging_station = plt.Circle((0, 0), self.r_c, color='blue', fill=True, alpha=0.9, label='Charging Station')
-    #     plt.gca().add_patch(charging_station)
-        
-    #     # Draw the bolt sign inside the charging station
-    #     plt.plot(0, 0, marker='$\u26A1$', color='yellow', markersize=20, linestyle='None', zorder=5)
-
-    #     # Previous position (initialize with the first data point)
-    #     prev_x, prev_y, _, _ = self.trajectory_data[0]
-    #     for x, y, battery, theta in self.trajectory_data:
-    #         color = self.battery_to_color(battery)  # Define this function based on your needs
-    #         plt.plot([prev_x, x], [prev_y, y], color=color)  # Draw line segment
-    #         prev_x, prev_y = x, y  # Update previous position
-
-    #     # Get the last position and the second last position to calculate the direction
-    #     last_x, last_y, _, last_theta = self.trajectory_data[-1]
-    #     second_last_x, second_last_y, _, _ = self.trajectory_data[-2]
-
-    #     # Calculate the direction vector from the second last to the last position
-    #     direction_x = last_x - second_last_x
-    #     direction_y = last_y - second_last_y
-
-    #     # Normalize the direction vector
-    #     length = np.hypot(direction_x, direction_y)
-    #     direction_x /= length
-    #     direction_y /= length
-
-    #     # Offset the position slightly in the opposite direction to align the tail with the trajectory
-    #     offset = -1.5  # Adjust this value as needed
-    #     aligned_x = last_x - direction_x * offset
-    #     aligned_y = last_y - direction_y * offset
-    #     airplane_marker = plt.text(aligned_x, aligned_y, s='$\u2708$', color='black', 
-    #                     ha='center', va='center', fontsize=25,
-    #                     rotation=np.degrees(last_theta), zorder=20)
-
-    #     limit = 60
-    #     plt.xlim(-limit, limit)
-    #     plt.ylim(-limit, limit)
-
-    #     plt.legend(loc='upper right')
-    #     plt.xlabel('X Position')
-    #     plt.ylabel('Y Position')
-    #     # plt.title('UAV Trajectory with Battery Level Coloring')
-    #     plt.savefig(f'plot/UAV{self.m}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
-    #     plt.show()
 
     # @property
     def rel_observation(self, uav_idx, target_idx): # of target relative to uav

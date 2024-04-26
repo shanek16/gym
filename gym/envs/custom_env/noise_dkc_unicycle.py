@@ -11,7 +11,7 @@ from gym.spaces import Box
 from gym.utils import seeding  
 # from typing import Optional
 from numpy import arctan2, array, cos, pi, sin
-import rendering
+# import rendering
 
 warnings.filterwarnings("ignore")
 

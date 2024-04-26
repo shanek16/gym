@@ -2,14 +2,15 @@ import os
 import sys
 # current_file_path = os.path.dirname(os.path.abspath(__file__))
 # sys.path.append(current_file_path)
-desired_path = os.path.expanduser("~/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/gym")
+desired_path = os.path.expanduser("/home/mlcs/Project/uav_dp/gym")
+# desired_path = os.path.expanduser("~/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/gym")
 sys.path.append(desired_path)
 import numpy as np
 import random
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiDiscrete
 from typing import Optional
-import rendering
+# import rendering
 
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
@@ -67,30 +68,40 @@ class MUMT(Env):
             return array([r, alpha, beta])  # beta
 
     class Target:
-        def __init__(
-            self,
-            state,
-            age = 0,
-            ):
+        def __init__(self, state, age=0, motion_type='static', sigma_rayleigh=0.5):
             self.state = state
+            self.dt = 0.05
             self.surveillance = None
             self.age = age
+            self.motion_type = motion_type
+            self.sigma_rayleigh = sigma_rayleigh
+            # print('self.motion_type: ', self.motion_type)
+            # print('self.sigma_rayleigh: ', self.sigma_rayleigh)
 
         def copy(self):
-            # Create a new Target instance with the same attributes
-            return MUMT.Target(state=self.state.copy(), age=self.age)
-        
+            # Assuming the copy method is intended to create a copy within the same parent environment
+            return MUMT.Target(state=self.state.copy(), age=self.age, motion_type=self.motion_type, sigma_rayleigh=self.sigma_rayleigh)
+
         def cal_age(self):
-            if self.surveillance == 0: # uav1 is not surveilling
-                self.age = min(1000, self.age + 1) #changeage
+            if self.surveillance == 0:  # UAV is not surveilling
+                self.age = min(1000, self.age + 1)  # Change age
             else:
                 self.age = 0
+
+        def update_position(self):
+            if self.motion_type == 'rayleigh':
+                speed = np.random.rayleigh(self.sigma_rayleigh)
+                angle = np.random.uniform(0, 2*np.pi)
+                dx = speed * np.cos(angle) * self.dt
+                dy = speed * np.sin(angle) * self.dt
+                self.state += np.array([dx, dy])
+
         @property
-        def obs(self): # polar coordinate of a target
+        def obs(self):
             x, y = self.state
             r = np.sqrt(x**2 + y**2)
-            beta = arctan2(y, x)
-            return array([r, beta])  # beta
+            beta = np.arctan2(y, x)
+            return np.array([r, beta])  # r, beta
 
     def __init__(
         self,
@@ -191,6 +202,8 @@ class MUMT(Env):
         target_pose=None,
         batteries=None,
         ages=None,
+        target_type = 'static',
+        sigma_rayleigh=0.5,
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ):
@@ -235,7 +248,7 @@ class MUMT(Env):
             target_states = target_pose  # Assuming target_pose is an iterable of target states
         # Create Target instances
         for i in range(self.n):
-            self.targets.append(self.Target(state=target_states[i], age=ages[i]))
+            self.targets.append(self.Target(state=target_states[i], age=ages[i], motion_type=target_type, sigma_rayleigh=sigma_rayleigh))
         return self.dict_observation, {}
 
     def q_init(self):
@@ -318,6 +331,8 @@ class MUMT(Env):
     def step(self, action):
         terminal = False
         truncated = False
+        for target in self.targets:
+            target.update_position()
         action = np.squeeze(action)
         reward = 0
         if action.ndim == 0:
@@ -570,7 +585,7 @@ if __name__ == "__main__":
     print(state0)
     print(state)'''
     
-    uav_env = MUMT(m=10, n=6)
+    uav_env = MUMT(m=2, n=2)
 
     # Number of features
     state_sample = uav_env.observation_space.sample()
@@ -581,7 +596,10 @@ if __name__ == "__main__":
     print('uav_env.action_space.n: ', uav_env.action_space)
         
     # testing env: alternating action
-    obs, _ = uav_env.reset()
+    # target_type = 'static'
+    target_type = 'rayleigh'
+    # target_type = 'deterministic'
+    obs = uav_env.reset(target_type=target_type, sigma_rayleigh=0.5)
     step = 0
     while step < 5000:
         step += 1
