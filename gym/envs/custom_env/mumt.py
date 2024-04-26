@@ -68,19 +68,17 @@ class MUMT(Env):
             return array([r, alpha, beta])  # beta
 
     class Target:
-        def __init__(self, state, age=0, motion_type='static', sigma_rayleigh=0.5):
-            self.state = state
+        def __init__(self, state, age=0, target_type='static', sigma_rayleigh=0.5):
             self.dt = 0.05
+            self.state = state
             self.surveillance = None
             self.age = age
-            self.motion_type = motion_type
+            self.target_type = target_type
             self.sigma_rayleigh = sigma_rayleigh
-            # print('self.motion_type: ', self.motion_type)
-            # print('self.sigma_rayleigh: ', self.sigma_rayleigh)
 
         def copy(self):
             # Assuming the copy method is intended to create a copy within the same parent environment
-            return MUMT.Target(state=self.state.copy(), age=self.age, motion_type=self.motion_type, sigma_rayleigh=self.sigma_rayleigh)
+            return MUMT.Target(state=self.state.copy(), age=self.age, target_type=self.target_type, sigma_rayleigh=self.sigma_rayleigh)
 
         def cal_age(self):
             if self.surveillance == 0:  # UAV is not surveilling
@@ -89,7 +87,7 @@ class MUMT(Env):
                 self.age = 0
 
         def update_position(self):
-            if self.motion_type == 'rayleigh':
+            if self.target_type == 'rayleigh':
                 speed = np.random.rayleigh(self.sigma_rayleigh)
                 angle = np.random.uniform(0, 2*np.pi)
                 dx = speed * np.cos(angle) * self.dt
@@ -248,7 +246,7 @@ class MUMT(Env):
             target_states = target_pose  # Assuming target_pose is an iterable of target states
         # Create Target instances
         for i in range(self.n):
-            self.targets.append(self.Target(state=target_states[i], age=ages[i], motion_type=target_type, sigma_rayleigh=sigma_rayleigh))
+            self.targets.append(self.Target(state=target_states[i], age=ages[i], target_type=target_type, sigma_rayleigh=sigma_rayleigh))
         return self.dict_observation, {}
 
     def q_init(self):
@@ -331,8 +329,6 @@ class MUMT(Env):
     def step(self, action):
         terminal = False
         truncated = False
-        for target in self.targets:
-            target.update_position()
         action = np.squeeze(action)
         reward = 0
         if action.ndim == 0:
@@ -507,14 +503,8 @@ class MUMT(Env):
             uav_x, uav_y, uav_theta = uav.state
             uav_transform = rendering.Transform(translation=(uav_x, uav_y), rotation=uav_theta)
             uav_tri = self.viewer.draw_polygon([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)])
-            try:
-                uav_tri.set_color(*self.uav_color[uav_idx])
-                uav_tri.add_attr(uav_transform)
-            except:
-                print('len(self.uav_color): ',len(self.uav_color))
-                print('uav_idx: ', uav_idx)
-                input()
-
+            uav_tri.set_color(*self.uav_color[uav_idx])
+            uav_tri.add_attr(uav_transform)
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
 
     # @property

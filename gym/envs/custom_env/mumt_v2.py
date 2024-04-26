@@ -31,6 +31,7 @@ class MUMT_v2(Env):
     '''
     ver 2: 
     - Initial # of uavs, targets don't change -> include all uav-target pairs as observation for value comparison
+    - moving target
     - coding trajectory plot
     '''
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
