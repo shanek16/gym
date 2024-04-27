@@ -8,7 +8,7 @@ import numpy as np
 from gym import Env
 from gym.spaces import Box, Dict, Discrete # MultiBinary, MultiDiscrete
 from typing import Optional
-import rendering
+# import rendering
 
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
@@ -21,10 +21,9 @@ def wrap(theta):
         theta += 2 * pi
     return theta
 
-class UAV1Target1_v2(Env):
+class UAV1Target1_v3(Env):
     '''
-    Verion 2: using class for uav and target.
-    Preparing for multi uavs and multi targets.
+    Verion 3: Solving Problem 2 directly with \omega
     '''
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
     class UAV:
@@ -42,7 +41,7 @@ class UAV1Target1_v2(Env):
         
         def copy(self):
             # Create a new UAV instance with the same attributes
-            return UAV1Target1_v2.UAV(state=self.state.copy(), v=self.v, battery=self.battery)
+            return UAV1Target1_v3.UAV(state=self.state.copy(), v=self.v, battery=self.battery)
     
         def move(self, action):
             dtheta = action * self.dt
@@ -75,7 +74,7 @@ class UAV1Target1_v2(Env):
 
         def copy(self):
             # Assuming the copy method is intended to create a copy within the same parent environment
-            return UAV1Target1_v2.Target(state=self.state.copy(), age=self.age, motion_type=self.motion_type, sigma_rayleigh=self.sigma_rayleigh)
+            return UAV1Target1_v3.Target(state=self.state.copy(), age=self.age, motion_type=self.motion_type, sigma_rayleigh=self.sigma_rayleigh)
 
         def cal_age(self):
             if self.surveillance == 0:  # UAV is not surveilling
@@ -104,6 +103,8 @@ class UAV1Target1_v2(Env):
         r_min=0,
         dt=0.05,
         d=10.0,
+        d_min=4.5,
+        v=1.0,
         l=3, # noqa
         m=1, # of uavs
         n=1, # of targets
@@ -113,6 +114,9 @@ class UAV1Target1_v2(Env):
     ):
         super().__init__()
         self.seed = seed
+        self.v = v
+        self.d_min = d_min
+        self.omega_max = self.v / self.d_min
         self.observation_space = Dict(
             {  # r, alpha
                 "uav1_target1": Box(
@@ -134,7 +138,10 @@ class UAV1Target1_v2(Env):
                 "age": Discrete(1001), #changeage
             }
         )
-        self.action_space = Discrete(2, seed = self.seed)  # 0: charge, 1: surveillance
+        # self.action_space = Discrete(2, seed = self.seed)  # 0: charge, 1: surveillance
+        self.action_space = Box(
+            low=array([-self.omega_max]), high=array([self.omega_max]), dtype=np.float32
+        )
         self.dt = dt
         self.discount = 0.999
         self.d = d  # target distance
@@ -152,35 +159,6 @@ class UAV1Target1_v2(Env):
         self.frame_counter = 0
         self.save_frames = False
         # self.print_q_init()
-
-        # initialization for Dynamic Programming
-        self.n_r = 800
-        self.n_alpha = 360
-        self.n_u = 2 #21
-
-        current_file_path = os.path.dirname(os.path.abspath(__file__))
-        self.distance_keeping_result00 = np.load(current_file_path+ os.path.sep + "v1_80_2a_dkc_val_iter.npz")
-        self.distance_keeping_straightened_policy00 = self.distance_keeping_result00["policy"] # .data
-        self.time_optimal_straightened_policy00 = np.load(current_file_path+ os.path.sep + "v1_terminal_40+40_2a_toc_policy_fp64.npy")
-        # print('shape of time_optimal_straightened_policy00',np.shape(self.time_optimal_straightened_policy00)) # 288000
-
-        self.states = States(
-            np.linspace(0.0, 80.0, self.n_r, dtype=np.float32),
-            np.linspace(
-                -np.pi,
-                np.pi - np.pi / self.n_alpha,
-                self.n_alpha,
-                dtype=np.float32,
-            ),
-            cycles=[np.inf, np.pi * 2],
-            n_alpha=self.n_alpha,
-        )
-
-        self.actions = Actions(
-            np.linspace(-1.0 / 4.5, 1.0 / 4.5, self.n_u, dtype=np.float32).reshape(
-                (-1, 1)
-            )
-        )
 
     def reset(
         self,
@@ -274,20 +252,6 @@ class UAV1Target1_v2(Env):
             cycles=[np.inf, np.pi*2, np.inf, np.pi*2, np.inf, np.inf],
             n_alpha=self.n_alpha,
         )
-
-    def toc_get_action(self, state):
-        S, P = self.states.computeBarycentric(state)
-        action = 0
-        for s, p in zip(S, P):
-            action += p * self.actions[int(self.time_optimal_straightened_policy00[s])]
-        return action
-
-    def dkc_get_action(self, state):
-        S, P = self.states.computeBarycentric(state)
-        action = 0
-        for s, p in zip(S, P):
-            action += p * self.actions[int(self.distance_keeping_straightened_policy00[s])]
-        return action
 
     def step(self, action):
         terminal = False
@@ -555,7 +519,7 @@ if __name__ == "__main__":
     print(state0)
     print(state)'''
     
-    uav_env = UAV1Target1_v2()
+    uav_env = UAV1Target1_v3()
     # action_sample = uav_env.action_space.sample()
     # print("action_sample: ", action_sample)
 

@@ -10,7 +10,7 @@ from gym import Env
 from gym.spaces import Box
 from gym.utils import seeding
 from numpy import arctan2, array, cos, pi, sin, tan
-import rendering
+# import rendering
 
 warnings.filterwarnings("ignore")
 
