@@ -604,6 +604,7 @@ class MUMT_v2(Env):
 
         # Draw UAV trajectories
         for uav_idx, uav_data in enumerate(self.uav_trajectory_data):  # Assuming self.uav_trajectory_data is a list of lists, one per UAV
+            # airplane_marker = [[] for _ in range(len(self.uav_trajectory_data))]
             # Previous position (initialize with the first data point)
             prev_x, prev_y, _, _ = uav_data[0]
             for x, y, battery, _ in uav_data:
@@ -628,8 +629,8 @@ class MUMT_v2(Env):
             aligned_x = last_x + direction_x * offset
             aligned_y = last_y + direction_y * offset
             airplane_marker = plt.text(aligned_x, aligned_y, s='$\u2708$', color='black', 
-                            ha='center', va='center', fontsize=25,
-                            rotation=np.degrees(last_theta), zorder=20)
+                                                ha='center', va='center', fontsize=25,
+                                                rotation=np.degrees(last_theta), zorder=20)
 
         limit = 60
         plt.xlim(-limit, limit)
