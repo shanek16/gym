@@ -288,7 +288,7 @@ class MUMT_v3(Env):
             self.uav_trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
 
         if target_pose is None:
-            target1_r = np.random.uniform(30, 35, self.n)  # 0~ D-d
+            target1_r = np.random.uniform(34, 35, self.n)  # 0~ D-d
             target1_beta = np.random.uniform(-np.pi, np.pi, self.n)
             target_states = np.array([target1_r * np.cos(target1_beta), target1_r * np.sin(target1_beta)]).T
             ages = [0] * self.n
@@ -674,7 +674,7 @@ class MUMT_v3(Env):
         plt.xlabel('X Position')
         plt.ylabel('Y Position')
         plt.title(f'UAV Trajectory for Policy {policy}')
-        plt.savefig(f'PLOT/UAV{self.m}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
+        plt.savefig(f'PLOT/UAV{self.m}_{self.targets[0].target_type}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
         plt.show()
 
     # @property
