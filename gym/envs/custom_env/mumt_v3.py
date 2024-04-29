@@ -74,16 +74,23 @@ class MUMT_v3(Env):
             return array([r, alpha, beta], dtype=np.float32)  # beta
 
     class Target:
-        def __init__(self, state, age=0, initial_beta=0, target_type='static', sigma_rayleigh=0.5):
+        def __init__(self, state, age=0, initial_beta=0, initial_r=30, target_type='static', sigma_rayleigh=0.5):
             self.dt = 0.05
             self.state = state
             self.surveillance = None
             self.age = age
             self.initial_beta = initial_beta
+            self.initial_r = initial_r
             self.target_type = target_type
             self.sigma_rayleigh = sigma_rayleigh
-            self.target_speed = 0.2
+            self.target_v = 0.25
             self.time_elapsed = 0
+            self.id = random.randint(0,1)
+            self.angle_radians = self.target_v*self.dt/self.initial_r
+            self.rotation_matrix = np.array([
+                                [np.cos(self.angle_radians), -np.sin(self.angle_radians)],
+                                [np.sin(self.angle_radians), np.cos(self.angle_radians)]
+                                ])
 
         def copy(self):
             # Assuming the copy method is intended to create a copy within the same parent environment
@@ -96,7 +103,33 @@ class MUMT_v3(Env):
                 self.age = 0
 
         def update_position(self):
-            if self.target_type == 'rayleigh':
+            if self.target_type in ('deterministic', 'both'):
+                if self.id % 2 == 0:
+                    # Define theta_T based on the current time_elapsed
+                    if 0 <= self.time_elapsed < 10:
+                        theta_T = np.cos(pi * self.time_elapsed / 10)
+                    elif 10 <= self.time_elapsed < 25:
+                        theta_T = -pi / 4
+                    elif 25 <= self.time_elapsed < 55:
+                        theta_T = pi / 4
+                    elif 55 <= self.time_elapsed < 100:
+                        theta_T = np.cos(pi * self.time_elapsed / 5) - pi / 8
+                    else:
+                        theta_T = np.cos((pi / 10 - 0.005 * (self.time_elapsed - 100)) * self.time_elapsed)
+
+                    # Update position based on theta_T
+                    heading_angle = wrap(self.initial_beta-np.pi)
+                    dx = self.target_v*np.cos(theta_T) * self.dt
+                    dy = self.target_v*np.sin(theta_T) * self.dt
+                    dx1, dy1 = dx*np.cos(heading_angle) - dy*np.sin(heading_angle), dx*np.sin(heading_angle) + dy*np.cos(heading_angle)
+                    self.state += np.array([dx1, dy1])
+                    # Update the time elapsed
+                    self.time_elapsed += self.dt
+                else:
+                    # rotate the target
+                    self.state = np.dot(self.rotation_matrix, self.state)
+
+            if self.target_type in ('rayleigh', 'both'):
                 speed = np.random.rayleigh(self.sigma_rayleigh)
                 angle = np.random.uniform(0, 2*np.pi)
                 dx = speed * np.cos(angle) * self.dt
@@ -108,28 +141,6 @@ class MUMT_v3(Env):
             #     dx = speed * np.cos(angle) * self.dt
             #     dy = speed * np.sin(angle) * self.dt
             #     self.state += np.array([dx, dy])
-            elif self.target_type == 'deterministic':
-                # Define theta_T based on the current time_elapsed
-                if 0 <= self.time_elapsed < 10:
-                    theta_T = np.cos(pi * self.time_elapsed / 10)
-                elif 10 <= self.time_elapsed < 25:
-                    theta_T = -pi / 4
-                elif 25 <= self.time_elapsed < 55:
-                    theta_T = pi / 4
-                elif 55 <= self.time_elapsed < 100:
-                    theta_T = np.cos(pi * self.time_elapsed / 5) - pi / 8
-                else:
-                    theta_T = np.cos((pi / 10 - 0.005 * (self.time_elapsed - 100)) * self.time_elapsed)
-
-                # Update position based on theta_T
-                heading_angle = wrap(self.initial_beta-np.pi)
-                dx = self.target_speed*np.cos(theta_T) * self.dt
-                dy = self.target_speed*np.sin(theta_T) * self.dt
-                dx1, dy1 = dx*np.cos(heading_angle) - dy*np.sin(heading_angle), dx*np.sin(heading_angle) + dy*np.cos(heading_angle)
-                self.state += np.array([dx1, dy1])
-
-            # Update the time elapsed
-            self.time_elapsed += self.dt
 
 
         @property
@@ -288,7 +299,7 @@ class MUMT_v3(Env):
             self.uav_trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
 
         if target_pose is None:
-            target1_r = np.random.uniform(34, 35, self.n)  # 0~ D-d
+            target1_r = np.random.uniform(30, 35, self.n)  # 0~ D-d
             target1_beta = np.random.uniform(-np.pi, np.pi, self.n)
             target_states = np.array([target1_r * np.cos(target1_beta), target1_r * np.sin(target1_beta)]).T
             ages = [0] * self.n
@@ -297,7 +308,7 @@ class MUMT_v3(Env):
 
         # Create Target instances
         for i in range(self.n):
-            self.targets.append(self.Target(state=target_states[i], age=ages[i], initial_beta=target1_beta[i], target_type=target_type, sigma_rayleigh=sigma_rayleigh))
+            self.targets.append(self.Target(state=target_states[i], age=ages[i], initial_beta=target1_beta[i], initial_r=target1_r[i], target_type=target_type, sigma_rayleigh=sigma_rayleigh))
         for target_idx, target in enumerate(self.targets):
             target_x, target_y = target.state
             self.target_trajectory_data[target_idx].append((target_x, target_y))
