@@ -27,12 +27,13 @@ def wrap(theta):
         theta += 2 * pi
     return theta
 
-class MUMT_v3(Env):
+class MUMT_v5(Env):
     '''
-    ver 3: 
+    ver 5: 
     - Initial # of uavs, targets don't change -> include all uav-target pairs as observation for value comparison
     - moving target(start from one end and travel to one end. Starting angle is random.)
     - coding trajectory plot
+    - recording and loading saved target trajectories.
     '''
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
     class UAV:
@@ -50,7 +51,7 @@ class MUMT_v3(Env):
         
         def copy(self):
             # Create a new UAV instance with the same attributes
-            return MUMT_v3.UAV(state=self.state.copy(), v=self.v, battery=self.battery)
+            return MUMT_v5.UAV(state=self.state.copy(), v=self.v, battery=self.battery)
     
         def move(self, action):
             dtheta = action * self.dt
@@ -74,7 +75,8 @@ class MUMT_v3(Env):
             return array([r, alpha, beta], dtype=np.float32)  # beta
 
     class Target:
-        def __init__(self, state, age=0, initial_beta=0, initial_r=30, target_type='static', sigma_rayleigh=0.5):
+        _id_counter = 0
+        def __init__(self, state, age=0, initial_beta=0, initial_r=30, target_type='static', sigma_rayleigh=0.5, m=None, seed=None,):
             self.dt = 0.05
             self.state = state
             self.surveillance = None
@@ -83,9 +85,15 @@ class MUMT_v3(Env):
             self.initial_r = initial_r
             self.target_type = target_type
             self.sigma_rayleigh = sigma_rayleigh
+            self.m = m
+            self.seed = seed
             self.target_v = 0.25
             self.time_elapsed = 0
-            self.id = random.randint(0,1)
+            self.positions = []
+            type(self)._id_counter += 1
+            self.id = type(self)._id_counter
+            # self.id = random.randint(0,1)
+            self.step_idx = 0
             self.angle_radians = self.target_v*self.dt/self.initial_r
             self.rotation_matrix = np.array([
                                 [np.cos(self.angle_radians), -np.sin(self.angle_radians)],
@@ -94,7 +102,7 @@ class MUMT_v3(Env):
 
         def copy(self):
             # Assuming the copy method is intended to create a copy within the same parent environment
-            return MUMT_v3.Target(state=self.state.copy(), age=self.age, initial_beta=self.initial_beta, target_type=self.target_type, sigma_rayleigh=self.sigma_rayleigh)
+            return MUMT_v5.Target(state=self.state.copy(), age=self.age, initial_beta=self.initial_beta, target_type=self.target_type, sigma_rayleigh=self.sigma_rayleigh)
 
         def cal_age(self):
             if self.surveillance == 0:  # UAV is not surveilling
@@ -103,6 +111,17 @@ class MUMT_v3(Env):
                 self.age = 0
 
         def update_position(self):
+            if self.target_type == 'load':
+                filename = f'traj/target_trajectory_m:{self.m}_seed:{self.seed}.npy'
+                try:
+                    trajectory_array = np.load(filename)
+                except Exception as e: print(e)
+                if trajectory_array.ndim > 2:
+                    self.state = trajectory_array[self.id][self.step_idx]
+                else:
+                    self.state = trajectory_array[self.step_idx]
+                # print('state: ',self.state)
+                self.step_idx += 1
             if self.target_type in ('deterministic', 'both'):
                 if self.id % 2 == 0:
                     # Define theta_T based on the current time_elapsed
@@ -135,6 +154,7 @@ class MUMT_v3(Env):
                 dx = speed * np.cos(angle) * self.dt
                 dy = speed * np.sin(angle) * self.dt
                 self.state += np.array([dx, dy])
+            self.positions.append(self.state)
             # elif self.target_type == 'cross':
             #     speed = np.random.rayleigh(self.sigma_rayleigh)
             #     angle = np.random.uniform(0, 2*np.pi)
@@ -206,6 +226,7 @@ class MUMT_v3(Env):
         self.uav_color = [(random.randrange(0, 11) / 10, random.randrange(0, 11) / 10, random.randrange(0, 11) / 10) for _ in range(m)]
         self.n = n  # of targets
         self.targets = []
+        self.trajectory_data = []
         self.r_c = r_c  # charge station radius
         self.step_count = None
         self.font = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 20)
@@ -308,7 +329,10 @@ class MUMT_v3(Env):
 
         # Create Target instances
         for i in range(self.n):
-            self.targets.append(self.Target(state=target_states[i], age=ages[i], initial_beta=target1_beta[i], initial_r=target1_r[i], target_type=target_type, sigma_rayleigh=sigma_rayleigh))
+            self.targets.append(self.Target(state=target_states[i], age=ages[i],
+                                            initial_beta=target1_beta[i], initial_r=target1_r[i],
+                                            target_type=target_type, sigma_rayleigh=sigma_rayleigh,
+                                            m=self.m, seed=self.seed,))
         for target_idx, target in enumerate(self.targets):
             target_x, target_y = target.state
             self.target_trajectory_data[target_idx].append((target_x, target_y))
@@ -392,6 +416,23 @@ class MUMT_v3(Env):
             else:
                 return 0
 
+    def load_trajectories(self):
+        filename = f'target_trajectory_m:{self.m}_seed:{self.seed}.npy'
+        if os.path.exists(filename):
+            trajectory_array = np.load(filename)
+            return trajectory_array
+        else:
+            return None
+
+    def apply_loaded_trajectories(self):
+        loaded_trajectory = self.load_trajectories()
+        if loaded_trajectory is not None:
+            for step, positions in enumerate(loaded_trajectory):
+                for idx, position in enumerate(positions):
+                    self.targets[idx].position = position
+                    self.targets[idx].state = position  # Assuming 'state' should reflect the current position
+
+
     def step(self, action):
         terminal = False
         truncated = False
@@ -419,6 +460,7 @@ class MUMT_v3(Env):
             self.uav_trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
         for target_idx, target in enumerate(self.targets):
             target.update_position()
+
             target_x, target_y = target.state
             self.target_trajectory_data[target_idx].append((target_x, target_y))
 
@@ -449,7 +491,23 @@ class MUMT_v3(Env):
         self.step_count += 1
         if self.step_count >= self.max_step:
             truncated = True
+            self.trajectory_data.append(list(target.positions for target in self.targets))
+            self.save_trajectories()
         return self.dict_observation, reward, terminal, truncated, {}
+
+    def save_trajectories(self):
+        trajectory_array = np.array(self.trajectory_data)
+        # print(np.shape(trajectory_array))
+        trajectory_array = trajectory_array.squeeze()
+        # trajectory_array = trajectory_array.reshape((6000,2))
+        # trajectory_array = trajectory_array[0]
+        # print(np.shape(trajectory_array))
+        # print(trajectory_array)
+        filename = f'traj/target_trajectory_m:{self.m}_seed:{self.seed}.npy'
+        directory = os.path.dirname(filename)
+        if not os.path.exists(directory):
+            os.makedirs(directory) 
+        np.save(filename, trajectory_array)
 
     def dry_cal_surveillance(self, uav1_copy, target1_copy, r_t):
         if uav1_copy.battery <= 0: # UAV dead
@@ -757,7 +815,7 @@ if __name__ == "__main__":
     print(state)'''
     m=4
     n=2
-    uav_env = MUMT_v3(m=m, n=n)
+    uav_env = MUMT_v5(m=m, n=n)
 
     # Number of features
     state_sample = uav_env.observation_space.sample()

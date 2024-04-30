@@ -7,7 +7,6 @@ sys.path.append(current_file_path)
 desired_path = os.path.expanduser("~/Project/model_guard/uav_paper/Stochastic optimal control/uav_dp/gym")
 sys.path.append(desired_path)
 import numpy as np
-import random
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiDiscrete
 from typing import Optional
@@ -27,12 +26,13 @@ def wrap(theta):
         theta += 2 * pi
     return theta
 
-class MUMT_v3(Env):
+class MUMT_v4(Env):
     '''
-    ver 3: 
+    ver 4: 
     - Initial # of uavs, targets don't change -> include all uav-target pairs as observation for value comparison
     - moving target(start from one end and travel to one end. Starting angle is random.)
     - coding trajectory plot
+    - trying to fix target trajectory(Brownian motion is not fixed.<different env use in test_code?)
     '''
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
     class UAV:
@@ -74,9 +74,10 @@ class MUMT_v3(Env):
             return array([r, alpha, beta], dtype=np.float32)  # beta
 
     class Target:
-        def __init__(self, state, age=0, initial_beta=0, initial_r=30, target_type='static', sigma_rayleigh=0.5):
+        def __init__(self, state, seed=None, age=0, initial_beta=0, initial_r=30, target_type='static', sigma_rayleigh=0.5):
             self.dt = 0.05
             self.state = state
+            # np.random.seed(seed)
             self.surveillance = None
             self.age = age
             self.initial_beta = initial_beta
@@ -85,7 +86,7 @@ class MUMT_v3(Env):
             self.sigma_rayleigh = sigma_rayleigh
             self.target_v = 0.25
             self.time_elapsed = 0
-            self.id = random.randint(0,1)
+            self.id = np.random.randint(0,2)
             self.angle_radians = self.target_v*self.dt/self.initial_r
             self.rotation_matrix = np.array([
                                 [np.cos(self.angle_radians), -np.sin(self.angle_radians)],
@@ -162,11 +163,9 @@ class MUMT_v3(Env):
         n=2, # of targets
         r_c=3,
         max_step=6000,
-        seed = None # one circle 1200 time steps
     ):
         super().__init__()
         self.render_mode = render_mode
-        self.seed = seed
         # Create the observation space
         obs_space = {}
 
@@ -195,7 +194,7 @@ class MUMT_v3(Env):
                                dtype=np.float32)
 
         self.observation_space = Dict(obs_space)
-        self.action_space = MultiDiscrete([n + 1] * m, seed=self.seed)
+        self.action_space = MultiDiscrete([n + 1] * m)
         self.dt = dt
         self.discount = 0.999
         self.r_max = r_max
@@ -203,7 +202,7 @@ class MUMT_v3(Env):
         self.l = l  # coverage gap: coverage: d-l ~ d+l # noqa
         self.m = m  # of uavs
         self.uavs = []
-        self.uav_color = [(random.randrange(0, 11) / 10, random.randrange(0, 11) / 10, random.randrange(0, 11) / 10) for _ in range(m)]
+        self.uav_color = [(np.random.randint(0, 11) / 10, np.random.randint(0, 11) / 10, np.random.randint(0, 11) / 10) for _ in range(m)]
         self.n = n  # of targets
         self.targets = []
         self.r_c = r_c  # charge station radius
@@ -308,7 +307,7 @@ class MUMT_v3(Env):
 
         # Create Target instances
         for i in range(self.n):
-            self.targets.append(self.Target(state=target_states[i], age=ages[i], initial_beta=target1_beta[i], initial_r=target1_r[i], target_type=target_type, sigma_rayleigh=sigma_rayleigh))
+            self.targets.append(self.Target(state=target_states[i], seed=self.seed, age=ages[i], initial_beta=target1_beta[i], initial_r=target1_r[i], target_type=target_type, sigma_rayleigh=sigma_rayleigh))
         for target_idx, target in enumerate(self.targets):
             target_x, target_y = target.state
             self.target_trajectory_data[target_idx].append((target_x, target_y))
