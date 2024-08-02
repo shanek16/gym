@@ -30,17 +30,26 @@ class TOC_real_Unicycle(Env):
         # max_step=24*1e4 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
 
         # LARUS
-        r_max=15_000,#원래는 15_000만큼 해야하는데, v=1일때 40하고 뒤에는 붙였던거 고려
-        r_min=1,
+        # r_max=15_000,#원래는 15_000만큼 해야하는데, v=1일때 40하고 뒤에는 붙였던거 고려
+        # r_min=1,
+        # sigma=0.0,
+        # dt=0.02, # 50hz
+        # v=43_000/3600, # 75km/h -> m/s
+        # d_min=40,
+        # max_step=64*1e3 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
+    
+        # Gazebo
+        r_max=5_000,#[m]
+        r_min=10, # ~ r_c in 1u1t/mumt
         sigma=0.0,
         dt=0.02, # 50hz
-        v=43_000/3600, # 75km/h -> m/s
-        d_min=40,
-        max_step=64*1e3 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
+        v=17, #[m/s]
+        d_min=30, #[m] minimum turing radius
+        max_step=15*1e3 # round(r_max/(v*dt) + 2*pi*d_min) # +2*pi*d_min is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
     ):
         self.viewer = None
         self.dt = dt
-        self.v = v/1000
+        self.v = v/1000 #[m -> km]
         self.vdt = self.v * dt
         self.d_min = d_min/1000
         self.r_min = r_min/1000

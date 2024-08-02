@@ -20,7 +20,7 @@ class TOC_Unicycle(Env):
 
     def __init__(
         self,
-        r_max=80.0,
+        r_max=20.0,
         r_min=1.0,
         sigma=0.0,
         dt=0.05,

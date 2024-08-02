@@ -32,15 +32,26 @@ class DKC_real_Unicycle(Env):
         # max_step=24*1e4, # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
 
         # LARUS
-        r_max=15_000, #communication max=80_000, but from r>~4*d solution is the same.
-        r_min=0.0,
+        # r_max=15_000, #communication max=80_000, but from r>~4*d solution is the same.
+        # r_min=0.0,
+        # sigma=0.0,
+        # dt=0.02, # 50hz
+        # v=43_000/3600, # 75km/h -> m/s
+        # d=100,
+        # d_min=40,
+        # k1=0.0181,
+        # max_step=65*1e3 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
+
+        # Gazebo
+        r_max=5_000,#[m]
+        r_min=10, # ~ r_c in 1u1t/mumt
         sigma=0.0,
         dt=0.02, # 50hz
-        v=43_000/3600, # 75km/h -> m/s
-        d=100,
-        d_min=40,
+        v=17, #[m/s]
+        d=300, #[m] keeping distance #TODO
+        d_min=30, #[m] minimum turing radius
         k1=0.0181,
-        max_step=65*1e3 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
+        max_step=15*1e3 # round(r_max/(v*dt) + 2*pi*d_min) # +2*pi*d_min is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
     ):
         # [km/s]
         self.viewer = None

@@ -90,8 +90,8 @@ class MUMT_v5(Env):
             self.target_v = 0.25
             self.time_elapsed = 0
             self.positions = []
-            type(self)._id_counter += 1
             self.id = type(self)._id_counter
+            type(self)._id_counter += 1
             # self.id = random.randint(0,1)
             self.step_idx = 0
             self.angle_radians = self.target_v*self.dt/self.initial_r
