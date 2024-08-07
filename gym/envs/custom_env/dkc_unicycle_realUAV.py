@@ -48,7 +48,7 @@ class DKC_real_Unicycle(Env):
         sigma=0.0,
         dt=0.02, # 50hz
         v=17, #[m/s]
-        d=300, #[m] keeping distance #TODO
+        d=40, #[m] keeping distance > d_min
         d_min=30, #[m] minimum turing radius
         k1=0.0181,
         max_step=15*1e3 # round(r_max/(v*dt) + 2*pi*d_min) # +2*pi*d_min is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
