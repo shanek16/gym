@@ -21,16 +21,16 @@ __all__ = [
 
 class States:
     def __init__(
-        self, *state_lists, cycles=None, terminal_states=None, dtype=np.float32
+        self, *state_lists, cycles=None, n_alpha=None, dtype=np.float64
     ):
         self.__data = None
         self.__cycles = None
-        self.terminal_states = None
+        self.__n_alpha = None
         self.update(
-            *state_lists, cycles=cycles, terminal_states=terminal_states, dtype=dtype
+            *state_lists, cycles=cycles, n_alpha=n_alpha, dtype=dtype
         )
 
-    def update(self, *state_lists, cycles=None, terminal_states=None, dtype=np.float32):
+    def update(self, *state_lists, cycles=None, n_alpha=None, dtype=np.float64):
 
         self.__data = [np.array(state_list, dtype=dtype) for state_list in state_lists]
 
@@ -44,12 +44,7 @@ class States:
                     len(state_lists), len(cycles)
                 )
             )
-        if terminal_states is None:
-            self.terminal_states = []
-        else:
-            self.terminal_states = list(
-                [np.array(state, dtype=self.dtype) for state in terminal_states]
-            )
+        self.__n_alpha = n_alpha
 
     def __getitem__(self, key):
 
@@ -136,9 +131,6 @@ class States:
             # Convert the selected values to numpy array
             item = np.array(selected_values)
             # print('concatenated item: ',item)
-            n_alpha = 10
-        else:
-            n_alpha = 360
         i = []
         p = []
         for (state_list, cycle, x) in zip(self.__data, self.__cycles, item):
@@ -163,7 +155,7 @@ class States:
                                 p.append(np.ones((1,), dtype=self.dtype))
                                 in_range = True
                             else:
-                                if d1 < np.pi/n_alpha: # for accuray(avoid extrapolating when interpolating is available for 2 nearer points) # 10 for 1uav1target
+                                if d1 < np.pi/self.__n_alpha: # for accuray(avoid extrapolating when interpolating is available for 2 nearer points) # 10 for 1uav1target
                                     d2 = x + cycle - state_list[-1] #seems to need fix
                                     i.append(np.array([idx -1, 0]))
                                     p.append(np.array([d1, d2]) / (d1 + d2))
@@ -182,7 +174,7 @@ class States:
                         in_range = True
                     else: # need fix
                         d2 = x - state_list[-1]
-                        if d2 < np.pi/n_alpha: # for accuray(avoid extrapolating when interpolating is available for 2 nearer points) # 10 for 1uav1target
+                        if d2 < np.pi/self.__n_alpha: # for accuray(avoid extrapolating when interpolating is available for 2 nearer points) # 10 for 1uav1target
                             d1 = state_list[0] + cycle - x
                             i.append(np.array([idx - 1, 0]))
                             p.append(np.array([d1, d2]) / (d1 + d2))
@@ -193,7 +185,7 @@ class States:
         probs = np.ones((1,), dtype=self.dtype)
         for dim, (idx, prob) in enumerate(zip(i, p)):
             indices = np.repeat(indices, len(idx)) + np.tile(idx, len(indices))
-            if dim < len(self.shape) - 1:
+            if dim < len(self.shape) - 1: # multi-dimension indices into 1d array index
                 indices *= self.shape[dim + 1]
             probs = np.repeat(probs, len(idx)) * np.tile(prob, len(probs))
         return indices, probs
@@ -231,7 +223,7 @@ class States:
 
 
 class Actions:
-    def __init__(self, action_list, dtype=np.float32):
+    def __init__(self, action_list, dtype=np.float64):
 
         self.__data = None
         self.__data_ndarr = None
@@ -263,7 +255,7 @@ class Actions:
     def num_actions(self):
         return len(self.__data)
 
-    def update(self, action_list, dtype=np.float32):
+    def update(self, action_list, dtype=np.float64):
         self.__data = list()
         self.__data_ndarr = list()
         for item in action_list:
@@ -280,7 +272,7 @@ class Actions:
 
 
 class Surveillance_Actions:
-    def __init__(self, action_lists, dtype=np.float32):
+    def __init__(self, action_lists, dtype=np.float64):
 
         self.__data = None
         self.__data_ndarr = None
@@ -312,7 +304,7 @@ class Surveillance_Actions:
     def num_actions(self):
         return len(self.__data)
 
-    def update(self, action_lists, dtype=np.float32):
+    def update(self, action_lists, dtype=np.float64):
         self.__data = list()
         self.__data_ndarr = list()
         for item in action_lists:
@@ -329,7 +321,7 @@ class Surveillance_Actions:
 
 
 class Rewards:
-    def __init__(self, states, actions, dtype=np.float32, sparse=False):
+    def __init__(self, states, actions, dtype=np.float64, sparse=False):
         shape = (states.num_states, actions.num_actions)
         if sparse:
             self.__data = sp.dok_matrix(shape, dtype=dtype)
@@ -425,7 +417,7 @@ class Rewards:
 
 
 class StateTransitionProbability:
-    def __init__(self, states, actions, dtype=np.float32):
+    def __init__(self, states, actions, dtype=np.float64):
         print(
             "states.num_states * actions.num_actions: ",
             states.num_states * actions.num_actions,
@@ -649,13 +641,16 @@ class MarkovDecisionProcess:
             spmat, arr = self.__sampler(state)
         else:
             spmat = self.__sampler(state)
-        queue.put(1)
+        if queue is None:
+            pass
+        else:
+            queue.put(1)
         if self.__sample_reward:
             return np.array([spmat.tocsr(), arr], dtype=object)
         else:
             return spmat.tocsr()
-
-    def sample(self, sampler, sample_reward=False, verbose=True, parallel=True):
+       
+    def sample(self, sampler, parallel, sample_reward=False, verbose=True):
         verbose = Verbose(verbose)
         verbose("Start sampling...")
         start_time = time()
@@ -700,12 +695,13 @@ class MarkovDecisionProcess:
                     result = self._worker(None, state)  # Replace None with an actual queue if necessary
                     data.append(result)
                 except Exception as e:
-                    # print(f"An error occurred: {e}")
+                    print(f"An error occurred: {e}")
                     traceback.print_exc()
                     sys.exit(1)
 
             if self.__sample_reward:
-                data = np.array(data.get(), dtype=object)
+                # data = np.array(data.get(), dtype=object)
+                data = np.array(data, dtype=object)
                 self.state_transition_probability.update(sp.vstack(data[:, 0]))
                 self.rewards.update(
                     np.array(data[:, 1].tolist(), dtype=self.rewards.dtype)
@@ -725,7 +721,6 @@ class MarkovDecisionProcess:
         self.states = States(
             *state_lists,
             cycles=data["states.cycles"],
-            terminal_states=data["states.terminal_states"]
         )
 
         self.actions = Actions(data["actions.data"])
@@ -775,7 +770,6 @@ class MarkovDecisionProcess:
         kwargs = {
             "states.num_lists": len(self.states.shape),
             "states.cycles": self.states.info(return_cycles=True),
-            "states.terminal_states": self.states.terminal_states,
             "actions.data": self.actions.toarray(),
             "rewards.issparse": self.rewards.issparse,
             "state_transition_probability.data": self.state_transition_probability.tospmat().data,
@@ -807,6 +801,7 @@ class MarkovDecisionProcessTerminalCondition:
         state_transition_probability=None,
         policy=None,
         discount=0,
+        terminal_condition=None
     ):
 
         self.states = States([]) if states is None else states
@@ -814,11 +809,13 @@ class MarkovDecisionProcessTerminalCondition:
         self.rewards = (
             Rewards(self.states, self.actions) if rewards is None else rewards
         )
+        print('discount: ', discount)
         self.discount = min(
             np.array(discount, dtype=self.rewards.dtype).item(),
             np.array(1, dtype=self.rewards.dtype).item()
             - np.finfo(self.rewards.dtype).eps,
         )
+        self.terminal_condition = terminal_condition
         self.state_transition_probability = (
             StateTransitionProbability(self.states, self.actions)
             if state_transition_probability is None
@@ -829,20 +826,22 @@ class MarkovDecisionProcessTerminalCondition:
         self.__sample_reward = False
 
     def _worker(self, queue, state):
-        # toc/dkc
-        # r, _ = state
-        # if r > 1: # if not terminal state:
-        # 1u1t
-        _, _, _, _, bat, _, _ = state
-        if bat > 0: # if not terminal state:
+        if len(state) == 2: # toc/dkc
+            r, _ = state
+            if r > self.terminal_condition: # if not terminal state
+                if self.__sample_reward:
+                    spmat, arr = self.__sampler(state)
+                else:
+                    spmat = self.__sampler(state)
+            else: # if state is in terminal states
+                spmat = sp.dok_matrix((self.actions.num_actions, self.states.num_states), dtype=np.float64)
+                state_indice, _ = self.states.computeBarycentric(state)
+                spmat[:, state_indice] += 1
+        else: # 1u1t
             if self.__sample_reward:
                 spmat, arr = self.__sampler(state)
             else:
                 spmat = self.__sampler(state)
-        else: # if state is in terminal states
-            spmat = sp.dok_matrix((self.actions.num_actions, self.states.num_states), dtype=np.float32)
-            state_indice, _ = self.states.computeBarycentric(state)
-            spmat[:, state_indice] += 1
         if queue is None:
             pass
         else:
@@ -922,7 +921,6 @@ class MarkovDecisionProcessTerminalCondition:
         self.states = States(
             *state_lists,
             cycles=data["states.cycles"],
-            terminal_states=data["states.terminal_states"]
         )
 
         self.actions = Actions(data["actions.data"])
@@ -968,11 +966,9 @@ class MarkovDecisionProcessTerminalCondition:
 
         if not sp.isspmatrix_csr(self.state_transition_probability.tospmat()):
             self.state_transition_probability.tocsr()
-
         kwargs = {
             "states.num_lists": len(self.states.shape),
             "states.cycles": self.states.info(return_cycles=True),
-            "states.terminal_states": self.states.terminal_states,
             "actions.data": self.actions.toarray(),
             "rewards.issparse": self.rewards.issparse,
             "state_transition_probability.data": self.state_transition_probability.tospmat().data,

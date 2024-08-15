@@ -395,6 +395,13 @@ register(
 )
 
 register(
+    id="UAV1Target1_real",
+    entry_point="gym.envs.custom_env.uav1target1_real:UAV1Target1_real",
+    max_episode_steps=72*3600,
+)
+
+
+register(
     id="MUMT",
     entry_point="gym.envs.custom_env.mumt:MUMT",
     max_episode_steps=6000,
@@ -445,11 +452,11 @@ register(
 register(
     id="DKC_real_Unicycle",
     entry_point="gym.envs.custom_env.dkc_unicycle_realUAV:DKC_real_Unicycle",
-    max_episode_steps=24*1e4,
+    max_episode_steps=30*1e3, # 5000m*2/17m/s*50hz
 )
 
 register(
     id="TOC_real_Unicycle",
     entry_point="gym.envs.custom_env.toc_unicycle_realUAV:TOC_real_Unicycle",
-    max_episode_steps=24*1e4,
+    max_episode_steps=30*1e3,
 )
