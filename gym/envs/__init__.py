@@ -426,6 +426,12 @@ register(
 )
 
 register(
+    id="MUMT_v5",
+    entry_point="gym.envs.custom_env.mumt_real:MUMT_real",
+    max_episode_steps=72*3600,
+)
+
+register(
     id="DKC_Unicycle",
     entry_point="gym.envs.custom_env.dkc_unicycle:DKC_Unicycle",
     max_episode_steps=2000, #80/75*3600*50*1.5,
