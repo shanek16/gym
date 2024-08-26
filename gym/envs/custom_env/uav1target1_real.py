@@ -111,9 +111,9 @@ class UAV1Target1_real(Env):
 
     def __init__(
         self,
-        r_c=10, #[m] ~ r_min in toc
         m=1, # of uavs
         n=1, # of targets
+        r_c=10, #[m] ~ r_min in toc
         seed = None
     ):
         super().__init__()
@@ -227,7 +227,7 @@ class UAV1Target1_real(Env):
 
         return self.dict_observation, {}
 
-    def print_q_init(self):
+    def print_q_init(self): #TODO: real parameters not implemented.
         '''
         Initalization function for printing q value on frame for debugging purpose.
         (Check if discretization and 1u1t value table's state setting matches with current discretization settings.)

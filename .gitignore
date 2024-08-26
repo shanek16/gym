@@ -8,6 +8,7 @@
 #pics
 *.bmp
 *.jpg
+gym/envs/custom_env/PLOT/
 
 # Setuptools distribution and build folders.
 /dist/
