@@ -405,12 +405,13 @@ class MUMT_real(Env):
             if self.uavs[uav_idx].battery <= 0: # UAV dead
                 pass
             else: # UAV alive: can take action
-                if action is None:
+                if action == -1:
                     action = self.uavs[uav_idx].previous_action
                 if action == 0:  # go to charging station
                     self.action_is_charge(uav_idx)
                 else:  # surveil target1
                     self.action_is_surveil(uav_idx, action)
+        return action
 
     def cal_surveillance(self, uav_idx, target_idx):
         if self.uavs[uav_idx].battery <= 0:
@@ -451,7 +452,8 @@ class MUMT_real(Env):
         if action.ndim == 0:
             action = np.expand_dims(action, axis=0)
         for uav_idx, uav_action in enumerate(action):
-            self.control_uav(uav_idx, uav_action)
+            uav_i_action = self.control_uav(uav_idx, uav_action)
+            action[uav_idx] = uav_i_action
 
         surveillance_matrix = np.zeros((self.m, self.n))
         for uav_idx in range(self.m):
