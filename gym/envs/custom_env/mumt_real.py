@@ -43,6 +43,7 @@ class MUMT_real(Env):
     min_rt = 1000 # [m]
 
     class UAV:
+        _id_counter = 0
         Q = 22_000 #[mAh] battery capacity
         C_rate = 2
         D_rate = 0.41 # 1/2.442(battery runtime)
@@ -52,9 +53,12 @@ class MUMT_real(Env):
             self,
             state,
             ):
+            self.id = type(self)._id_counter
+            type(self)._id_counter += 1
             self.battery = self.Q
             self.state = state
             self.charging = 0
+            self.previous_action = 0
         
         def copy(self):
             # Create a new UAV instance with the same attributes
@@ -101,7 +105,6 @@ class MUMT_real(Env):
             self.time_elapsed = 0
             self.id = type(self)._id_counter
             type(self)._id_counter += 1
-            # self.id = random.randint(0,1)
             self.step_idx = 0
             self.angle_radians = self.target_v*dt/self.initial_r
             self.rotation_matrix = np.array([
@@ -181,6 +184,7 @@ class MUMT_real(Env):
         m=2, # of uavs
         n=2, # of targets
         r_c=10,
+        max_step=72*3600*HIGHER_LEVEL_CONTROL_FREQEUCNY,
         seed = None # one circle 1200 time steps
     ):
         super().__init__()
@@ -228,8 +232,7 @@ class MUMT_real(Env):
         self.step_count = None
         self.font = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 20)
         self.num2str = {0: "charge", 1: "target_1"}
-        self.max_step = 72*3600*HIGHER_LEVEL_CONTROL_FREQEUCNY
-        # self.max_step = 1200
+        self.max_step = max_step
         self.viewer = None
         self.SAVE_FRAMES_PATH = "../../../../visualized/MUMT" # example. save frames path is set at surveillance_PPO.py
         self.episode_counter = 0
@@ -376,6 +379,23 @@ class MUMT_real(Env):
         action = sum(p * self.actions[int(self.distance_keeping_straightened_policy00[s])] for s, p in zip(S, P))
         return action
 
+    def action_is_charge(self, uav_idx):
+        if (self.uavs[uav_idx].obs[0] < self.r_c):
+            # uav1 no move
+            self.uavs[uav_idx].charging = 1
+            self.uavs[uav_idx].battery = min(self.UAV.Q, self.uavs[uav_idx].battery + self.UAV.C_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
+        else:  # not able to land on charge station(too far)
+            self.uavs[uav_idx].battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
+            w1_action = self.toc_get_action(self.uavs[uav_idx].obs[:2])
+            self.uavs[uav_idx].move(w1_action)
+        self.uavs[uav_idx].previous_action = 0
+
+    def action_is_surveil(self, uav_idx, action):
+        self.uavs[uav_idx].battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
+        w1_action = self.dkc_get_action(self.rel_observation(uav_idx, action-1)[:2])
+        self.uavs[uav_idx].move(w1_action)
+        self.uavs[uav_idx].previous_action = 1
+
     def control_uav(self, uav_idx, action):
         '''
         this part must be run at 30 Hz
@@ -385,19 +405,12 @@ class MUMT_real(Env):
             if self.uavs[uav_idx].battery <= 0: # UAV dead
                 pass
             else: # UAV alive: can take action
+                if action is None:
+                    action = self.uavs[uav_idx].previous_action
                 if action == 0:  # go to charging station
-                    if (self.uavs[uav_idx].obs[0] < self.r_c):
-                        # uav1 no move
-                        self.uavs[uav_idx].charging = 1
-                        self.uavs[uav_idx].battery = min(self.UAV.Q, self.uavs[uav_idx].battery + self.UAV.C_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
-                    else:  # not able to land on charge station(too far)
-                        self.uavs[uav_idx].battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
-                        w1_action = self.toc_get_action(self.uavs[uav_idx].obs[:2])
-                        self.uavs[uav_idx].move(w1_action)
+                    self.action_is_charge(uav_idx)
                 else:  # surveil target1
-                    self.uavs[uav_idx].battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
-                    w1_action = self.dkc_get_action(self.rel_observation(uav_idx, action-1)[:2])
-                    self.uavs[uav_idx].move(w1_action)
+                    self.action_is_surveil(uav_idx, action)
 
     def cal_surveillance(self, uav_idx, target_idx):
         if self.uavs[uav_idx].battery <= 0:
@@ -744,7 +757,7 @@ class MUMT_real(Env):
         plt.xlabel('X Position')
         plt.ylabel('Y Position')
         plt.title(f'UAV Trajectory for Policy {policy}')
-        plt.savefig(f'PLOT/real_UAV{self.m}_{self.targets[0].target_type}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
+        # plt.savefig(f'PLOT/real_UAV{self.m}_{self.targets[0].target_type}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
         plt.show()
 
     # @property
@@ -810,7 +823,7 @@ class MUMT_real(Env):
 if __name__ == "__main__":
     m=4
     n=2
-    uav_env = MUMT_real(m=m, n=n)
+    uav_env = MUMT_real(m=m, n=n, max_step=1200)
     seed = 0
     # uav_env = MUMT_real(m=m, n=n)
 
@@ -844,7 +857,7 @@ if __name__ == "__main__":
     # Heuristic policy
     step = 0
     truncated = False
-    obs, _ = uav_env.reset(seed=seed, target_type='load') # target_type: static, load, both
+    obs, _ = uav_env.reset(seed=seed, target_type='static') # target_type: static, load, both
     
     # 1. load trajectories and plot
     # uav_env.apply_loaded_trajectories(load_uav=True, load_target=True)
