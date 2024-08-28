@@ -140,7 +140,7 @@ class TOC_real_Unicycle(Env):
     def observation(self):
         x, y = self.state[:2] #+ self.sigma * self.np_random.randn(2)  # self.sigma=0 anyways
         r = (x**2 + y**2) ** 0.5
-        alpha = wrap(arctan2(y, x) - wrap(self.state[-1]) - pi)
+        alpha = wrap(arctan2(y, x) - self.state[-1] - pi)
         return array([r, alpha])
 
     def close(self):

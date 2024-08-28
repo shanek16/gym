@@ -69,9 +69,9 @@ class UAV1Target1_real(Env):
         def obs(self): # observation of uav relative to charging station
             x, y = self.state[:2]
             r = np.sqrt(x**2 + y**2)
-                        # beta                  # theta
-            alpha = wrap(arctan2(y, x) - wrap(self.state[-1]) - pi)
             beta = arctan2(y, x)
+                        # beta                  # theta
+            alpha = wrap(beta - self.state[-1] - pi)
             return array([r, alpha, beta])  # beta
 
     class Target:
@@ -393,11 +393,11 @@ class UAV1Target1_real(Env):
                     uav1_copy.move(w1_action)
             uav_x, uav_y, theta = uav1_copy.state
             target_x, target_y = target1_copy.state
-            x = target_x - uav_x
-            y = target_y - uav_y
+            x = uav_x - target_x
+            y = uav_y - target_y
             r_t = np.sqrt(x**2 + y**2)
             beta_t = arctan2(y, x)
-            alpha_t = wrap(beta_t - wrap(theta))
+            alpha_t = wrap(beta_t - theta - pi)
             self.dry_cal_surveillance(uav1_copy, target1_copy, r_t)
             target1_copy.cal_age()
 
@@ -476,16 +476,16 @@ class UAV1Target1_real(Env):
             uav1_tri.set_color(1, 1, 1)  # (1,1,0)yellow
             uav1_tri.add_attr(uav1_tf)
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
-
+    
     @property
-    def rel_observation(self): # of target relative to uav
+    def rel_observation(self): # of uav relative to target
         uav_x, uav_y, theta = self.uav1.state
         target_x, target_y = self.target1.state
-        x = target_x - uav_x
-        y = target_y - uav_y
+        x = uav_x - target_x
+        y = uav_y - target_y
         r = np.sqrt(x**2 + y**2)
         beta = arctan2(y, x)
-        alpha = wrap(beta - wrap(theta))
+        alpha = wrap(beta - theta - pi)
         return array([r, alpha, beta])
 
     def cal_surveillance(self):

@@ -11,7 +11,7 @@ import random
 from gym import Env
 from gym.spaces import Box, Dict, Discrete, MultiDiscrete
 from typing import Optional
-# import rendering
+import rendering
 
 from mdp import Actions, States
 from numpy import arctan2, array, cos, pi, sin
@@ -70,7 +70,7 @@ class MUMT_v5(Env):
             x, y = self.state[:2]
             r = np.sqrt(x**2 + y**2)
                         # beta                  # theta
-            alpha = wrap(arctan2(y, x) - wrap(self.state[-1]) - pi)
+            alpha = wrap(arctan2(y, x) - self.state[-1] - pi)
             beta = arctan2(y, x)
             return array([r, alpha, beta], dtype=np.float32)  # beta
 
@@ -561,11 +561,11 @@ class MUMT_v5(Env):
                     uav1_copy.move(w1_action)
             uav_x, uav_y, theta = uav1_copy.state
             target_x, target_y = target1_copy.state
-            x = target_x - uav_x
-            y = target_y - uav_y
+            x = uav_x - target_x
+            y = uav_y - target_y
             r_t = np.sqrt(x**2 + y**2)
             beta_t = arctan2(y, x)
-            alpha_t = wrap(beta_t - wrap(theta))
+            alpha_t = wrap(beta_t - theta - pi)
             self.dry_cal_surveillance(uav1_copy, target1_copy, r_t)
             target1_copy.cal_age()
 
@@ -745,16 +745,15 @@ class MUMT_v5(Env):
         plt.title(f'UAV Trajectory for Policy {policy}')
         plt.savefig(f'PLOT/UAV{self.m}_{self.targets[0].target_type}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
         plt.show()
-
-    # @property
-    def rel_observation(self, uav_idx, target_idx): # of target relative to uav
+    
+    def rel_observation(self, uav_idx, target_idx): # of uav relative to target
         uav_x, uav_y, theta = self.uavs[uav_idx].state
         target_x, target_y = self.targets[target_idx].state
-        x = target_x - uav_x
-        y = target_y - uav_y
+        x = uav_x - target_x
+        y = uav_y - target_y
         r = np.sqrt(x**2 + y**2)
         beta = arctan2(y, x)
-        alpha = wrap(beta - wrap(theta))
+        alpha = wrap(beta - theta - pi)
         return array([r, alpha, beta],dtype=np.float32)
 
     @property
