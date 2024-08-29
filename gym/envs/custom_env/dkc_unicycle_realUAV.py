@@ -10,9 +10,11 @@ from gym import Env
 from gym.spaces import Box
 from gym.utils import seeding
 from numpy import arctan2, array, cos, pi, sin
-# import rendering
+import rendering
 
 warnings.filterwarnings("ignore")
+
+CONTROL_FREQUENCY = 25
 
 class DKC_real_Unicycle(Env):
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
@@ -46,12 +48,12 @@ class DKC_real_Unicycle(Env):
         r_max=5_000,#[m]
         r_min=10, # ~ r_c in 1u1t/mumt
         sigma=0.0,
-        dt=0.02, # 50hz
+        dt=1/CONTROL_FREQUENCY, # 50hz
         v=17, #[m/s]
         d=40, #[m] keeping distance > d_min
         d_min=30, #[m] minimum turing radius
         k1=0.0181,
-        max_step=15*1e3 # round(r_max/(v*dt) + 2*pi*d_min) # +2*pi*d_min is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
+        max_step=7630 # round(r_max/(v*dt) + 2*pi*d_min) # +2*pi*d_min is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
     ):
         # [km/s]
         self.viewer = None
@@ -134,7 +136,7 @@ class DKC_real_Unicycle(Env):
     def render(self, mode="human"):
         if self.viewer is None:
             self.viewer = rendering.Viewer(1000, 1000)
-            bound = self.observation_space.high[0] * 1.05
+            bound = self.observation_space.high[0] * 1.05/10 # for original scale, remove /10
             self.viewer.set_bounds(-bound, bound, -bound, bound)
         x, y, theta = self.state
         target = self.viewer.draw_circle(radius=self.r_min, filled=True)
@@ -142,7 +144,7 @@ class DKC_real_Unicycle(Env):
         circle = self.viewer.draw_circle(radius=self.d, filled=False)
         circle.set_color(1,1,1)
         tf = rendering.Transform(translation=(x, y), rotation=theta)
-        tri = self.viewer.draw_polygon(self.scale_points([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)], 1/10))
+        tri = self.viewer.draw_polygon(self.scale_points([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)], 1/100))
         tri.set_color(0.5, 0.5, 0.9)
         tri.add_attr(tf)
         return self.viewer.render(return_rgb_array=mode == "rgb_array")

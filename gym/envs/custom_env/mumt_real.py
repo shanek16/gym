@@ -22,9 +22,10 @@ from matplotlib import pyplot as plt
 # from matplotlib.transforms import Affine2D
 # from icecream import ic
 
-LOWER_LEVEL_CONTROL_FREQEUCNY = 30 # [hz]
-HIGHER_LEVEL_CONTROL_FREQEUCNY = 1 # 50 # [hz]
-dt = 1/HIGHER_LEVEL_CONTROL_FREQEUCNY # 0.02 [s]
+LOWER_LEVEL_CONTROL_FREQUENCY = 25 # [hz]
+HIGHER_LEVEL_CONTROL_FREQUENCY = 25 # 50 # [hz]
+hdt = 1/HIGHER_LEVEL_CONTROL_FREQUENCY
+ldt = 1/LOWER_LEVEL_CONTROL_FREQUENCY
 render_freq = 1
 
 def wrap(theta):
@@ -65,13 +66,14 @@ class MUMT_real(Env):
             return MUMT_real.UAV(state=self.state.copy(), v=self.v, battery=self.battery)
     
         def move(self, action):
-            dtheta = action * dt
+            # operate in lower level frequency
+            dtheta = action * ldt
             _lambda = dtheta / 2
             if _lambda == 0.0:
-                self.state[0] += self.v*dt * cos(self.state[-1])
-                self.state[1] += self.v*dt * sin(self.state[-1])
+                self.state[0] += self.v*ldt * cos(self.state[-1])
+                self.state[1] += self.v*ldt * sin(self.state[-1])
             else:
-                ds = self.v*dt * sin(_lambda) / _lambda
+                ds = self.v*ldt * sin(_lambda) / _lambda
                 self.state[0] += ds * cos(self.state[-1] + _lambda)
                 self.state[1] += ds * sin(self.state[-1] + _lambda)
                 self.state[2] += dtheta
@@ -91,7 +93,7 @@ class MUMT_real(Env):
         d=40 #[m] keeping distance > d_min
         epsilon=2 # [m] coverage gap(coverage: d-l ~ d+l), 5% of d
         def __init__(self, state, age=0, initial_beta=0, initial_r=1000, target_type='static', sigma_rayleigh=0.5, n=None, seed=None,):
-            dt = 0.05
+            ldt = 1/LOWER_LEVEL_CONTROL_FREQUENCY
             self.state = state
             self.surveillance = None
             self.age = age
@@ -106,7 +108,7 @@ class MUMT_real(Env):
             self.id = type(self)._id_counter
             type(self)._id_counter += 1
             self.step_idx = 0
-            self.angle_radians = self.target_v*dt/self.initial_r
+            self.angle_radians = self.target_v*ldt/self.initial_r
             self.rotation_matrix = np.array([
                                 [np.cos(self.angle_radians), -np.sin(self.angle_radians)],
                                 [np.sin(self.angle_radians), np.cos(self.angle_radians)]
@@ -120,11 +122,15 @@ class MUMT_real(Env):
 
         def cal_age(self):
             if self.surveillance == 0:  # UAV is not surveilling
-                self.age = min(self.max_age, self.age + dt)  # Change age
+                self.age = min(self.max_age, self.age + hdt)  # Change age
             else:
                 self.age = 0
 
-        def update_position(self):
+        def update_position(self, update_freq):
+            if update_freq == 'high':
+                dt = hdt
+            else:
+                dt = ldt
             if self.target_type == 'load':
                 if self.target_trajectory_array.ndim > 2:
                     self.state = self.target_trajectory_array[self.id][self.step_idx]
@@ -184,7 +190,7 @@ class MUMT_real(Env):
         m=2, # of uavs
         n=2, # of targets
         r_c=10,
-        max_step=72*3600*HIGHER_LEVEL_CONTROL_FREQEUCNY,
+        max_step=72*3600*HIGHER_LEVEL_CONTROL_FREQUENCY,
         seed = None # one circle 1200 time steps
     ):
         super().__init__()
@@ -219,7 +225,6 @@ class MUMT_real(Env):
 
         self.observation_space = Dict(obs_space)
         self.action_space = MultiDiscrete([n + 1] * m, seed=self.seed)
-        self.dt = dt
         self.discount = 0.999
         self.d = self.Target.d  # target distance
         self.epsilon = self.Target.epsilon  # coverage gap: coverage: d-l ~ d+l
@@ -349,7 +354,7 @@ class MUMT_real(Env):
         self.battery_space = np.concatenate([np.arange(0, 500, 100), np.arange(500, 3100, 500)])
 
         self.age_space = np.arange(0, 1001, 100) #changeage
-        self.UAV1Target1_result00 = np.load(current_file_path + f"/1U1T_s6_age1000:100_gamma_{self.discount}_dt_{dt}_{'val'}_iter.npz")
+        self.UAV1Target1_result00 = np.load(current_file_path + f"/1U1T_s6_age1000:100_gamma_{self.discount}_dt_{ldt}_{'val'}_iter.npz")
         self.UAV1Target1_straightened_policy00 = self.UAV1Target1_result00["policy"]
         self.UAV1Target1_values00 = self.UAV1Target1_result00["values"]
         # print('shape of UAV1Target1_straightened_policy00: ', np.shape(self.UAV1Target1_straightened_policy00))
@@ -369,59 +374,6 @@ class MUMT_real(Env):
             cycles=[np.inf, np.pi*2, np.inf, np.pi*2, np.inf, np.inf]
         )
 
-    def toc_get_action(self, state):
-        S, P = self.states.computeBarycentric(state)
-        action = sum(p * self.actions[int(self.time_optimal_straightened_policy00[s])] for s, p in zip(S, P))
-        return action
-
-    def dkc_get_action(self, state):
-        S, P = self.states.computeBarycentric(state)
-        action = sum(p * self.actions[int(self.distance_keeping_straightened_policy00[s])] for s, p in zip(S, P))
-        return action
-
-    def action_is_charge(self, uav_idx):
-        if (self.uavs[uav_idx].obs[0] < self.r_c):
-            # uav1 no move
-            self.uavs[uav_idx].charging = 1
-            self.uavs[uav_idx].battery = min(self.UAV.Q, self.uavs[uav_idx].battery + self.UAV.C_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
-        else:  # not able to land on charge station(too far)
-            self.uavs[uav_idx].battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
-            w1_action = self.toc_get_action(self.uavs[uav_idx].obs[:2])
-            self.uavs[uav_idx].move(w1_action)
-        self.uavs[uav_idx].previous_action = 0
-
-    def action_is_surveil(self, uav_idx, action):
-        self.uavs[uav_idx].battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
-        w1_action = self.dkc_get_action(self.rel_observation(uav_idx, action-1)[:2])
-        self.uavs[uav_idx].move(w1_action)
-        self.uavs[uav_idx].previous_action = 1
-
-    def control_uav(self, uav_idx, action):
-        '''
-        this part must be run at 30 Hz
-        '''
-        for _ in range(LOWER_LEVEL_CONTROL_FREQEUCNY):
-            self.uavs[uav_idx].charging = 0
-            if self.uavs[uav_idx].battery <= 0: # UAV dead
-                pass
-            else: # UAV alive: can take action
-                if action == -1:
-                    action = self.uavs[uav_idx].previous_action
-                if action == 0:  # go to charging station
-                    self.action_is_charge(uav_idx)
-                else:  # surveil target1
-                    self.action_is_surveil(uav_idx, action)
-        return action
-
-    def cal_surveillance(self, uav_idx, target_idx):
-        if self.uavs[uav_idx].battery <= 0:
-            return 0
-        else: # UAV alive
-            if self.d - self.epsilon < self.rel_observation(uav_idx, target_idx)[0] < self.d + self.epsilon:
-                return 1 # uav1 is surveilling target 1
-            else:
-                return 0
-            
     def load_target_trajectories(self):
         filename = f'traj/real_target_trajectory_n:{self.n}_seed:{self.seed}.npy'
         if os.path.exists(filename):
@@ -444,6 +396,72 @@ class MUMT_real(Env):
         if load_target:
             self.target_trajectory_data = self.load_target_trajectories()
 
+    def add_trajectories(self):
+        for uav_idx, uav in enumerate(self.uavs):  # Replace 'self.uavs' with how you access your UAVs
+            uav_x, uav_y, uav_theta = uav.state  # Replace with actual position attributes
+            uav_battery_level = uav.battery  # Replace with actual battery attribute
+            self.uav_trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
+        for target_idx, target in enumerate(self.targets):
+            if target.target_type != 'static':
+                target.update_position(update_freq='low')
+                target_x, target_y = target.state
+                self.target_trajectory_data[target_idx].append((target_x, target_y))
+
+    def toc_get_action(self, state):
+        S, P = self.states.computeBarycentric(state)
+        action = sum(p * self.actions[int(self.time_optimal_straightened_policy00[s])] for s, p in zip(S, P))
+        return action
+
+    def dkc_get_action(self, state):
+        S, P = self.states.computeBarycentric(state)
+        action = sum(p * self.actions[int(self.distance_keeping_straightened_policy00[s])] for s, p in zip(S, P))
+        return action
+
+    def action_is_charge(self, uav_idx):
+        if self.uavs[uav_idx].obs[0] < self.r_c:
+            # uav1 no move
+            self.uavs[uav_idx].charging = 1
+            self.uavs[uav_idx].battery = min(self.UAV.Q, self.uavs[uav_idx].battery + self.UAV.C_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQUENCY)
+        else:  # not able to land on charge station(too far)
+            self.uavs[uav_idx].battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQUENCY)
+            w1_action = self.toc_get_action(self.uavs[uav_idx].obs[:2])
+            self.uavs[uav_idx].move(w1_action)
+        self.uavs[uav_idx].previous_action = 0
+
+    def action_is_surveil(self, uav_idx, action):
+        self.uavs[uav_idx].battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQUENCY)
+        w1_action = self.dkc_get_action(self.rel_observation(uav_idx, action-1)[:2])
+        self.uavs[uav_idx].move(w1_action)
+        self.uavs[uav_idx].previous_action = 1
+
+    def control_uav(self, uav_idx, action):
+        '''
+        this part must be run at 30 Hz
+        '''
+        # for _ in range(LOWER_LEVEL_CONTROL_FREQUENCY):
+        self.uavs[uav_idx].charging = 0
+        if self.uavs[uav_idx].battery <= 0: # UAV dead
+            pass
+            # break
+        else: # UAV alive: can take action
+            if action == -1:
+                action = self.uavs[uav_idx].previous_action
+            if action == 0:  # go to charging station
+                self.action_is_charge(uav_idx)
+            else:  # surveil target1
+                self.action_is_surveil(uav_idx, action)
+        self.add_trajectories()
+        return action
+
+    def cal_surveillance(self, uav_idx, target_idx):
+        if self.uavs[uav_idx].battery <= 0:
+            return 0
+        else: # UAV alive
+            if self.d - self.epsilon < self.rel_observation(uav_idx, target_idx)[0] < self.d + self.epsilon:
+                return 1 # uav1 is surveilling target 1
+            else:
+                return 0
+
     def step(self, action):
         terminal = False
         truncated = False
@@ -454,6 +472,10 @@ class MUMT_real(Env):
         for uav_idx, uav_action in enumerate(action):
             uav_i_action = self.control_uav(uav_idx, uav_action)
             action[uav_idx] = uav_i_action
+        # Uncomment this when you don't need to save trajectories
+        # for target_idx, target in enumerate(self.targets):
+        #     if target.target_type != 'static':
+        #         target.update_position(update_freq='high')
 
         surveillance_matrix = np.zeros((self.m, self.n))
         for uav_idx in range(self.m):
@@ -466,16 +488,8 @@ class MUMT_real(Env):
             reward += -self.targets[target_idx].age
         reward = reward / self.n # average reward of all targets
 
-        # For smooth plot, we need to append trajectories every 30hz(higher level control frequency)
-        for uav_idx, uav in enumerate(self.uavs):  # Replace 'self.uavs' with how you access your UAVs
-            uav_x, uav_y, uav_theta = uav.state  # Replace with actual position attributes
-            uav_battery_level = uav.battery  # Replace with actual battery attribute
-            self.uav_trajectory_data[uav_idx].append((uav_x, uav_y, uav_battery_level, uav_theta))
-        for target_idx, target in enumerate(self.targets):
-            if target.target_type != 'static':
-                target.update_position()
-                target_x, target_y = target.state
-                self.target_trajectory_data[target_idx].append((target_x, target_y))
+        # For smooth plot, moved to control_uav (we need to append trajectories every 30hz(higher level control frequency))
+        # self.add_trajectories()
 
         if self.save_frames and int(self.step_count) % 6 == 0:
             image = self.render(action, mode="rgb_array")
@@ -556,24 +570,24 @@ class MUMT_real(Env):
             if truncated:
                 break
             # Logic for UAV1's battery and actions
-            for _ in range(LOWER_LEVEL_CONTROL_FREQEUCNY):
-                uav1_copy.charging = 0
-                if uav1_copy.battery <= 0:  # UAV dead
-                    pass
-                else:
-                    if action == 0:
-                        if (dry_dict_observation['uav1_charge_station'][0] < self.r_c):
-                            uav1_copy.charging = 1
-                            uav1_copy.battery = min(self.UAV.Q, self.uavs[uav_idx].battery + self.UAV.C_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
-                        else:
-                            uav1_copy.battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
-                            w1_action = self.toc_get_action(dry_dict_observation['uav1_charge_station'][:2])
-                            uav1_copy.move(w1_action)
-                        
+            # for _ in range(LOWER_LEVEL_CONTROL_FREQUENCY):
+            uav1_copy.charging = 0
+            if uav1_copy.battery <= 0:  # UAV dead
+                pass
+            else:
+                if action == 0:
+                    if (dry_dict_observation['uav1_charge_station'][0] < self.r_c):
+                        uav1_copy.charging = 1
+                        uav1_copy.battery = min(self.UAV.Q, self.uavs[uav_idx].battery + self.UAV.C_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQUENCY)
                     else:
-                        uav1_copy.battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQEUCNY)
-                        w1_action = self.dkc_get_action(dry_dict_observation['uav1_target1'][:2])
+                        uav1_copy.battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQUENCY)
+                        w1_action = self.toc_get_action(dry_dict_observation['uav1_charge_station'][:2])
                         uav1_copy.move(w1_action)
+                    
+                else:
+                    uav1_copy.battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQUENCY)
+                    w1_action = self.dkc_get_action(dry_dict_observation['uav1_target1'][:2])
+                    uav1_copy.move(w1_action)
             uav_x, uav_y, theta = uav1_copy.state
             target_x, target_y = target1_copy.state
             x = uav_x - target_x
@@ -759,8 +773,8 @@ class MUMT_real(Env):
         plt.xlabel('X Position')
         plt.ylabel('Y Position')
         plt.title(f'UAV Trajectory for Policy {policy}')
-        # plt.savefig(f'PLOT/real_UAV{self.m}_{self.targets[0].target_type}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
         plt.show()
+        plt.savefig(f'PLOT/real_UAV{self.m}_{self.targets[0].target_type}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
     
     def rel_observation(self, uav_idx, target_idx): # of uav relative to target
         uav_x, uav_y, theta = self.uavs[uav_idx].state
@@ -822,9 +836,9 @@ class MUMT_real(Env):
 
 
 if __name__ == "__main__":
-    m=4
-    n=2
-    uav_env = MUMT_real(m=m, n=n, max_step=1200)
+    m=1
+    n=1
+    uav_env = MUMT_real(m=m, n=n, max_step=1200*5)
     seed = 0
     # uav_env = MUMT_real(m=m, n=n)
 
@@ -836,47 +850,49 @@ if __name__ == "__main__":
     # print('uav_env.observation_space:', uav_env.observation_space)
     # print('uav_env.action_space.n: ', uav_env.action_space)
         
-    # testing env: alternating action
-    '''# target1_r = np.random.uniform(20, 35, self.n)  # 0~ D-d
+    # 1. testing env: alternating action
+    # target1_r = np.random.uniform(20, 35, self.n)  # 0~ D-d
     # target1_beta = np.random.uniform(-np.pi, np.pi, self.n)
-    target_states = np.array([np.array([0, 24]), np.array([30, 20])]).T
-    ages = [100] * n
-    batteries = np.array([3000, 1000])
+    # target_states = np.array([np.array([0, 24]), np.array([30, 20])]).T
+    # ages = [100] * n
+    # batteries = np.array([3000, 1000])
 
     # obs, _ = uav_env.reset(target_pose=(target_states, ages), batteries=batteries)
     obs, _ = uav_env.reset()
     step = 0
-    while step < 5000:
-        step += 1
-        if step % 1000 == 0:
-            action_sample = uav_env.action_space.sample()
-        obs, reward, _, truncated, _ = uav_env.step(action_sample)
-        bat = obs['battery']
-        print(f'step: {step} | battery: {bat} | reward: {reward}')
-        uav_env.render(action_sample)'''
-    
-    # Heuristic policy
-    step = 0
     truncated = False
-    obs, _ = uav_env.reset(seed=seed, target_type='static') # target_type: static, load, both
-    
-    # 1. load trajectories and plot
-    # uav_env.apply_loaded_trajectories(load_uav=True, load_target=True)
-    
-    # 2. test with env.step()
-    total_reward = 0
+    action_sample = np.array([1]*m)
     while truncated == False:
         step += 1
-        # action = r_t_hungarian(obs, m, n)
-        action = high_age_first(obs, m)
-        # action = np.arange(1, m + 1)
-        # action = np.where(action > n, 0, action)
-        obs, reward, _, truncated, _ = uav_env.step(action)
-        total_reward += reward
+        # if step % 600 == 0:
+        #     action_sample = uav_env.action_space.sample()
+        obs, reward, _, truncated, _ = uav_env.step(action_sample)
         bat = obs['battery']
-        age = obs['age']
-        # print(f'step: {step} | battery: {bat} | reward: {reward}') #, end=' |')
-        # print(f'action: {action}')#, end=' |')
-        # uav_env.render(action, mode='rgb_array')
-    print(f'total reward: {total_reward}')   
-    uav_env.plot_trajectory(policy = 'Heuristic') # end
+        # print(f'step: {step} | battery: {bat} | reward: {reward}')
+        # uav_env.render(action_sample)
+    uav_env.plot_trajectory(policy = 'Random') # end
+    
+    # 2. Heuristic policy
+    # step = 0
+    # truncated = False
+    # obs, _ = uav_env.reset(seed=seed, target_type='static') # target_type: static, load, both
+    
+    # # +) load trajectories and plot
+    # # uav_env.apply_loaded_trajectories(load_uav=True, load_target=True)
+    
+    # total_reward = 0
+    # while truncated == False:
+    #     step += 1
+    #     # action = r_t_hungarian(obs, m, n)
+    #     action = high_age_first(obs, m)
+    #     # action = np.arange(1, m + 1)
+    #     # action = np.where(action > n, 0, action)
+    #     obs, reward, _, truncated, _ = uav_env.step(action)
+    #     total_reward += reward
+    #     bat = obs['battery']
+    #     age = obs['age']
+    #     # print(f'step: {step} | battery: {bat} | reward: {reward}') #, end=' |')
+    #     # print(f'action: {action}')#, end=' |')
+    #     # uav_env.render(action, mode='rgb_array')
+    # print(f'total reward: {total_reward}')   
+    # uav_env.plot_trajectory(policy = 'Heuristic') # end

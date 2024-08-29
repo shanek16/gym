@@ -668,7 +668,7 @@ class MUMT_v5(Env):
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
 
     def plot_trajectory(self, policy):
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(10, 10))
 
         # Set the same scale for both axes
         plt.axis('equal')
@@ -743,8 +743,8 @@ class MUMT_v5(Env):
         plt.xlabel('X Position')
         plt.ylabel('Y Position')
         plt.title(f'UAV Trajectory for Policy {policy}')
-        plt.savefig(f'PLOT/UAV{self.m}_{self.targets[0].target_type}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
         plt.show()
+        plt.savefig(f'PLOT/UAV{self.m}_{self.targets[0].target_type}_Target{self.n}_{policy}_trajectory_{self.seed}.png')
     
     def rel_observation(self, uav_idx, target_idx): # of uav relative to target
         uav_x, uav_y, theta = self.uavs[uav_idx].state
@@ -812,8 +812,8 @@ if __name__ == "__main__":
     state, reward, _, _, _ = env.step(action=0)
     print(state0)
     print(state)'''
-    m=4
-    n=2
+    m=1
+    n=1
     uav_env = MUMT_v5(m=m, n=n)
 
     # Number of features
@@ -825,26 +825,41 @@ if __name__ == "__main__":
     # print('uav_env.action_space.n: ', uav_env.action_space)
         
     # testing env: alternating action
-    '''# target1_r = np.random.uniform(20, 35, self.n)  # 0~ D-d
-    # target1_beta = np.random.uniform(-np.pi, np.pi, self.n)
+    '''target1_r = np.random.uniform(20, 35, self.n)  # 0~ D-d
+    target1_beta = np.random.uniform(-np.pi, np.pi, self.n)
     target_states = np.array([np.array([0, 24]), np.array([30, 20])]).T
     ages = [100] * n
     batteries = np.array([3000, 1000])
+    obs, _ = uav_env.reset(target_pose=(target_states, ages), batteries=batteries)
+    '''
 
-    # obs, _ = uav_env.reset(target_pose=(target_states, ages), batteries=batteries)
+    # obs, _ = uav_env.reset()
+    # step = 0
+    # while step < 5000:
+    #     step += 1
+    #     if step % 1000 == 0:
+    #         action_sample = uav_env.action_space.sample()
+    #     obs, reward, _, truncated, _ = uav_env.step(action_sample)
+    #     bat = obs['battery']
+    #     print(f'step: {step} | battery: {bat} | reward: {reward}')
+    #     uav_env.render(action_sample)
+
     obs, _ = uav_env.reset()
     step = 0
-    while step < 5000:
-        step += 1
-        if step % 1000 == 0:
-            action_sample = uav_env.action_space.sample()
+    truncated = False
+    action_sample = np.array([1]*m)
+    while truncated == False:
+        # step += 1
+        # if step % 600 == 0:
+        #     action_sample = uav_env.action_space.sample()
         obs, reward, _, truncated, _ = uav_env.step(action_sample)
-        bat = obs['battery']
-        print(f'step: {step} | battery: {bat} | reward: {reward}')
-        uav_env.render(action_sample)'''
+        # bat = obs['battery']
+        # print(f'step: {step} | battery: {bat} | reward: {reward}')
+        # uav_env.render(action_sample)
+    uav_env.plot_trajectory(policy = 'Random') # end
     
     # Heuristic policy
-    repitition = 10
+    '''repitition = 10
     avg_reward = 0
     for i in range(repitition):
         step = 0
@@ -867,4 +882,4 @@ if __name__ == "__main__":
         print(f'{i}: {total_reward}')   
         avg_reward += total_reward
     avg_reward /= repitition
-    print(f'average reward: {avg_reward}')
+    print(f'average reward: {avg_reward}')'''
