@@ -10,12 +10,19 @@ from gym import Env
 from gym.spaces import Box
 from gym.utils import seeding
 from numpy import arctan2, array, cos, pi, sin
-# import rendering
+import rendering
 
 warnings.filterwarnings("ignore")
 
+CONTROL_FREQUENCY = 20
+
 class TOC_real_Unicycle(Env):
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
+    # Gazebo
+    v=17 #[m/s]
+    d_min=30 #[m] minimum turing radius
+    r_max=5_000#[m]
+    r_min=10 # ~ r_c in 1u1t/mumt
     def __init__(
         self,
         # Double check to match the terminal condition: r < r_min in mdp.py
@@ -39,21 +46,13 @@ class TOC_real_Unicycle(Env):
         # max_step=64*1e3 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
     
         # Gazebo
-        r_max=5_000,#[m]
-        r_min=10, # ~ r_c in 1u1t/mumt
         sigma=0.0,
-        dt=0.02, # 50hz
-        v=17, #[m/s]
-        d_min=30, #[m] minimum turing radius
+        dt=1/CONTROL_FREQUENCY, # 20hzs
         max_step=15*1e3 # round(r_max/(v*dt) + 2*pi*d_min) # +2*pi*d_min is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
     ):
         self.viewer = None
         self.dt = dt
-        self.v = v/1000 #[m -> km]
         self.vdt = self.v * dt
-        self.d_min = d_min/1000
-        self.r_min = r_min/1000
-        self.r_max = r_max/1000
         self.omega_max = self.v / self.d_min
         self.observation_space = Box(
             low=array([self.r_min, -pi]), high=array([self.r_max, pi]), dtype=np.float64
@@ -131,16 +130,17 @@ class TOC_real_Unicycle(Env):
         target = self.viewer.draw_circle(radius=self.r_min, filled=True)
         target.set_color(1, 0.6, 0)
         tf = rendering.Transform(translation=(x, y), rotation=theta)
-        tri = self.viewer.draw_polygon(self.scale_points([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)], 1/10))
+        tri = self.viewer.draw_polygon(self.scale_points([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)], 100))
         tri.set_color(0.5, 0.5, 0.9)
         tri.add_attr(tf)
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
 
     @property
     def observation(self):
-        x, y = self.state[:2] #+ self.sigma * self.np_random.randn(2)  # self.sigma=0 anyways
-        r = (x**2 + y**2) ** 0.5
-        alpha = wrap(arctan2(y, x) - self.state[-1] - pi)
+        x, y, theta = self.state #+ self.sigma * self.np_random.randn(2)  # self.sigma=0 anyways
+        r = np.sqrt(x**2 + y**2)
+        beta = arctan2(y, x)
+        alpha = wrap(beta - theta - pi)
         return array([r, alpha])
 
     def close(self):

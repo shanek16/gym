@@ -11,14 +11,20 @@ from gym.spaces import Box
 from gym.utils import seeding
 from numpy import arctan2, array, cos, pi, sin
 import rendering
+from icecream import ic
 
 warnings.filterwarnings("ignore")
 
-CONTROL_FREQUENCY = 25
+CONTROL_FREQUENCY = 20
 
 class DKC_real_Unicycle(Env):
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
-
+    # Gazebo
+    v=17 #[m/s]
+    d=40 #[m] keeping distance > d_min
+    d_min=30 #[m] minimum turing radius
+    r_max=5_000#[m]
+    r_min=10 # ~ r_c in 1u1t/mumt
     def __init__(
         # [m/s]
         self,
@@ -45,34 +51,23 @@ class DKC_real_Unicycle(Env):
         # max_step=65*1e3 # round(r_max/(v*dt)*1.1) #1.1 times is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
 
         # Gazebo
-        r_max=5_000,#[m]
-        r_min=10, # ~ r_c in 1u1t/mumt
         sigma=0.0,
-        dt=1/CONTROL_FREQUENCY, # 50hz
-        v=17, #[m/s]
-        d=40, #[m] keeping distance > d_min
-        d_min=30, #[m] minimum turing radius
-        k1=0.0181,
+        dt=1/CONTROL_FREQUENCY, # 20hzs
         max_step=7630 # round(r_max/(v*dt) + 2*pi*d_min) # +2*pi*d_min is to give sufficient time for the UAV to travel from the end of the map to the target and circle at least once
     ):
         # [km/s]
         self.viewer = None
         self.dt = dt
-        self.v = v/1000
         self.vdt = self.v * dt
-        self.d = d/1000
-        self.d_min = d_min/1000
-        self.r_min = r_min/1000
-        self.r_max = r_max/1000
         self.omega_max = self.v / self.d_min
         self.observation_space = Box(
-            low=array([self.r_min, -pi]), high=array([self.r_max, pi]), dtype=np.float32
+            low=array([self.r_min, -pi]), high=array([self.r_max, pi]), dtype=np.float64
         )
         self.action_space = Box(
-            low=array([-self.omega_max]), high=array([self.omega_max]), dtype=np.float32
+            low=array([-self.omega_max]), high=array([self.omega_max]), dtype=np.float64
         )
         self.sigma = sigma
-        self.k1 = k1
+        # self.k1 = k1
         self.max_step = max_step
         self.step_count = None
         self.state = None
@@ -120,7 +115,8 @@ class DKC_real_Unicycle(Env):
         obs = self.observation
         # terminal = obs[0] > self.observation_space.high[0]
         # terminal = obs[0] < self.observation_space.low[0]
-        reward = self.k1 * (obs[0] - self.d) ** 2 + (-self.v * cos(obs[1])) ** 2
+        # reward = self.k1 * (obs[0] - self.d) ** 2 + (-self.v * cos(obs[1])) ** 2
+        reward = (obs[0] - self.d) ** 2
         reward = -reward
         if self.step_count > self.max_step:
             truncated = True
@@ -144,16 +140,17 @@ class DKC_real_Unicycle(Env):
         circle = self.viewer.draw_circle(radius=self.d, filled=False)
         circle.set_color(1,1,1)
         tf = rendering.Transform(translation=(x, y), rotation=theta)
-        tri = self.viewer.draw_polygon(self.scale_points([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)], 1/100))
+        tri = self.viewer.draw_polygon(self.scale_points([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)], 10))
         tri.set_color(0.5, 0.5, 0.9)
         tri.add_attr(tf)
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
 
     @property
     def observation(self):
-        x, y = self.state[:2] #+ self.sigma * self.np_random.randn(2)  # self.sigma=0 anyways
-        r = (x**2 + y**2) ** 0.5
-        alpha = wrap(arctan2(y, x) - self.state[-1] - pi)
+        x, y, theta = self.state #+ self.sigma * self.np_random.randn(2)  # self.sigma=0 anyways
+        r = np.sqrt(x**2 + y**2)
+        beta = arctan2(y, x)
+        alpha = wrap(beta - theta - pi)
         return array([r, alpha])
 
     def close(self):

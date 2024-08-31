@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw, ImageFont
 from heuristic import r_t_hungarian, high_age_first
 from matplotlib import pyplot as plt
 # from matplotlib.transforms import Affine2D
+from icecream import ic
 
 def wrap(theta):
     if theta > pi:

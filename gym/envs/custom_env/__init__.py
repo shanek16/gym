@@ -19,6 +19,7 @@ from gym.envs.custom_env.mumt import MUMT
 from gym.envs.custom_env.mumt_v2 import MUMT_v2
 from gym.envs.custom_env.mumt_v3 import MUMT_v3
 from gym.envs.custom_env.mumt_v5 import MUMT_v5
+from gym.envs.custom_env.mumt_v6 import MUMT_v6
 from gym.envs.custom_env.mumt_real import MUMT_real
 from gym.envs.custom_env.dkc_unicycle import DKC_Unicycle
 from gym.envs.custom_env.toc_unicycle import TOC_Unicycle
