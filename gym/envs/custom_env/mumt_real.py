@@ -26,7 +26,7 @@ LOWER_LEVEL_CONTROL_FREQUENCY = 20 # [hz]
 HIGHER_LEVEL_CONTROL_FREQUENCY = 1 # 50 # [hz]
 hdt = 1/HIGHER_LEVEL_CONTROL_FREQUENCY
 ldt = 1/LOWER_LEVEL_CONTROL_FREQUENCY
-render_freq = 1
+render_freq = 20
 
 def wrap(theta):
     if theta > pi:
@@ -620,8 +620,28 @@ class MUMT_real(Env):
     def render(self, action, mode="human"):
         if self.viewer is None:
             self.viewer = rendering.Viewer(1000, 1000)
-            bound = int(self.UAV.r_max * 1.05)
-            self.viewer.set_bounds(-bound, bound, -bound, bound)
+            minx = miny = maxx = maxy = 0
+            for target_idx, target in enumerate(self.targets):
+                target_x, target_y = target.state
+                minx = min(minx, target_x-self.Target.d)
+                maxx = max(maxx, target_x+self.Target.d)
+                miny = min(miny, target_y-self.Target.d)
+                maxy = max(maxy, target_y+self.Target.d)
+            minx = minx*1.05
+            maxx = maxx*1.05
+            miny = miny*1.05
+            maxy = maxy*1.05
+            bounds = [minx, maxx, miny, maxy]
+            for i,bound in enumerate(bounds):
+                if bound == 0:
+                    if i % 2 == 0:
+                        bounds[i] = -20
+                    else:
+                        bounds[i] = 20
+            # print(bounds)
+            # bound = int(self.UAV.r_max * 1.05)
+            # self.viewer.set_bounds(-bound, bound, -bound, bound)
+            self.viewer.set_bounds(bounds[0], bounds[1], bounds[2], bounds[3])
 
         # Render all self.targets
         for target_idx, target in enumerate(self.targets):
@@ -869,7 +889,7 @@ if __name__ == "__main__":
         obs, reward, _, truncated, _ = uav_env.step(action_sample)
         # bat = obs['battery']
         # print(f'step: {step} | battery: {bat} | reward: {reward}')
-        # uav_env.render(action_sample)
+        uav_env.render(action_sample)
     uav_env.plot_trajectory(policy = 'Random') # end
     
     # 2. Heuristic policy
