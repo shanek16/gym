@@ -59,7 +59,7 @@ class MUMT_real(Env):
             self.battery = self.Q
             self.state = state
             self.charging = 0
-            self.previous_action = 0
+            self.previous_action = 1
         
         def copy(self):
             # Create a new UAV instance with the same attributes
@@ -432,7 +432,7 @@ class MUMT_real(Env):
         self.uavs[uav_idx].battery = max(0, self.uavs[uav_idx].battery - self.UAV.D_rate*self.UAV.Q/3600/LOWER_LEVEL_CONTROL_FREQUENCY)
         w1_action = self.dkc_get_action(self.rel_observation(uav_idx, action-1)[:2])
         self.uavs[uav_idx].move(w1_action)
-        self.uavs[uav_idx].previous_action = 1
+        self.uavs[uav_idx].previous_action = action
 
     def control_uav(self, uav_idx, action):
         '''
@@ -450,6 +450,7 @@ class MUMT_real(Env):
                 else:  # surveil target1
                     self.action_is_surveil(uav_idx, action)
             self.add_trajectories()
+            # print(f'UAV {uav_idx} battery: {self.uavs[uav_idx].battery} | action: {action}')
         return action
 
     def cal_surveillance(self, uav_idx, target_idx):
@@ -617,6 +618,9 @@ class MUMT_real(Env):
         green = min(battery_level / self.UAV.Q, 1)
         return (red, green, 0)
 
+    def scale_points(self, points, scale_factor):
+        return [(x * scale_factor, y * scale_factor) for x, y in points]
+
     def render(self, action, mode="human"):
         if self.viewer is None:
             self.viewer = rendering.Viewer(1000, 1000)
@@ -693,7 +697,7 @@ class MUMT_real(Env):
                 continue
             uav_x, uav_y, uav_theta = uav.state
             uav_transform = rendering.Transform(translation=(uav_x, uav_y), rotation=uav_theta)
-            uav_tri = self.viewer.draw_polygon([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)])
+            uav_tri = self.viewer.draw_polygon(self.scale_points([(-0.8, 0.8), (-0.8, -0.8), (1.6, 0)], 10))
             # try:
             # uav_tri.set_color(*self.uav_color[uav_idx])
             uav_tri.set_color(*self.battery_to_color(uav.battery))

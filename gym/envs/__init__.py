@@ -426,12 +426,6 @@ register(
 )
 
 register(
-    id="MUMT_v6",
-    entry_point="gym.envs.custom_env.mumt_v5:MUMT_v6",
-    max_episode_steps=6000,
-)
-
-register(
     id="MUMT_real",
     entry_point="gym.envs.custom_env.mumt_real:MUMT_real",
     max_episode_steps=72*3600,
